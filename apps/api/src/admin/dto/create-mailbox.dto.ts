@@ -1,11 +1,12 @@
 import { IsNotEmpty, IsString, IsOptional, MinLength, Matches, IsNumber } from 'class-validator';
+import { Min, Max, IsInt } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateMailboxDto {
   @ApiProperty({ example: 'john', description: 'Local part before @' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[a-zA-Z0-9._-]+$/, {
+  @Matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/, {
     message: 'Local part can only contain letters, numbers, dots, underscores, and hyphens',
   })
   localPart: string;
@@ -27,7 +28,9 @@ export class CreateMailboxDto {
   displayName?: string;
 
   @ApiProperty({ example: 1073741824, description: 'Quota in bytes (default 1GB)', required: false })
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   @IsOptional()
   quotaBytes?: number;
 }

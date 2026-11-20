@@ -31,7 +31,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET', 'dev_jwt_secret_at_least_32_chars_long_ok'),
+      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });
   }
 
@@ -56,7 +56,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         where: { id: payload.sub },
         include: { domain: true },
       });
-      if (!mailbox || !mailbox.isActive || mailbox.deletedAt) {
+      if (!mailbox || !mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
         throw new UnauthorizedException('Mailbox account inactive or not found');
       }
       return {

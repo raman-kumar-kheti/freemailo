@@ -1,13 +1,19 @@
 {
   "name": "mail-service",
   "version": "1.0.0",
-  "description": "A production-ready, self-hosted multi-domain email hosting platform with a Gmail-style webmail UI.",
+  "description": "Self-hosted multi-domain email platform with webmail and administration",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm --prefix apps/api run build && npm --prefix apps/web run build",
+    "typecheck": "npm --prefix apps/api run typecheck && npm --prefix apps/web run typecheck",
+    "lint": "npm --prefix apps/api run lint && npm --prefix apps/web run lint",
+    "test": "npm --prefix apps/api test -- --runInBand",
+    "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
+    "db:seed:dev": "SEED_DEVELOPMENT=true tsx prisma/seed.ts",
+    "admin:create": "node scripts/create-admin.cjs"
   },
   "keywords": [],
   "author": "",

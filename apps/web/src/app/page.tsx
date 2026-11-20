@@ -197,10 +197,7 @@ export default function MailboxApp() {
   };
   useEffect(() => {
     if (!user) return;
-    const token = api.getToken();
-    const events = new EventSource(
-      `/api/mail/events${token ? `?token=${encodeURIComponent(token)}` : ""}`,
-    );
+    const events = new EventSource("/api/mail/events", { withCredentials: true });
     events.onmessage = (event) => {
       try {
         if (

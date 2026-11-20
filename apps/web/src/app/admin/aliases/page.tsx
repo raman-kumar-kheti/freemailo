@@ -79,7 +79,7 @@ export default function AliasesAdminPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Aliases & Forwarding</h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Map incoming addresses to external or internal forwarding destinations
+            Map incoming addresses to hosted mailbox destinations
           </p>
         </div>
         <button

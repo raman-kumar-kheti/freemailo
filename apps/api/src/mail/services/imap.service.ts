@@ -1,8 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { sortedUids } from './imap-sort';
+import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { JSDOM } from 'jsdom';
 import { RedisService } from '../../redis/redis.module';
+import { createMailClient, closeMailClient } from './mail-connection';
 import { SaveDraftDto } from '../dto/save-draft.dto';
 
 async function streamToBuffer(stream: any): Promise<Buffer> {
@@ -92,24 +94,7 @@ export class ImapService {
    * Helper to create an authenticated ImapFlow client using master user
    */
   private createClient(email: string): ImapFlow {
-    const host = process.env.DOVECOT_HOST || 'dovecot';
-    const port = parseInt(process.env.DOVECOT_IMAP_PORT || '993', 10);
-    const masterUser = process.env.DOVECOT_MASTER_USER || 'mailhive_master';
-    const masterPassword = process.env.DOVECOT_MASTER_PASSWORD || 'mailhive_master_secret_2026';
-
-    return new ImapFlow({
-      host,
-      port,
-      secure: true,
-      auth: {
-        user: `${email}*${masterUser}`,
-        pass: masterPassword,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      logger: false,
-    });
+    return createMailClient(email);
   }
 
   /**
@@ -173,7 +158,7 @@ export class ImapService {
       await redis.set(cacheKey, JSON.stringify(result), 'EX', 15);
       return result;
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -204,25 +189,21 @@ export class ImapService {
       try {
         const mailboxObj: any = client.mailbox;
         const total = (mailboxObj && typeof mailboxObj.exists === 'number') ? mailboxObj.exists : 0;
-        if (total === 0) {
+        if (total === 0 || (page - 1) * pageSize >= total) {
           return {
             data: [],
-            total: 0,
+            total,
             page,
             pageSize,
-            totalPages: 0,
+            totalPages: Math.ceil(total / pageSize),
           };
         }
 
-        // Fetch all sequence ranges or paginated fetch
-        // In IMAP, sequences are 1-based from 1 to total (1 is oldest, total is newest)
-        // For date desc: newest messages are (total - offset) down to (total - offset - limit + 1)
         const messages: MessageListItemDto[] = [];
-        const startSeq = Math.max(1, total - (page * pageSize) + 1);
-        const endSeq = Math.max(1, total - ((page - 1) * pageSize));
-
-        if (startSeq <= total && endSeq >= 1) {
-          const seqRange = `${startSeq}:${endSeq}`;
+        const orderedUids = await sortedUids(client, sortField, sortOrder);
+        const pageUids = orderedUids.slice((page - 1) * pageSize, page * pageSize);
+        if (pageUids.length) {
+          const seqRange = pageUids.join(',');
           for await (const msg of client.fetch(seqRange, {
             uid: true,
             envelope: true,
@@ -230,7 +211,7 @@ export class ImapService {
             bodyStructure: true,
             internalDate: true,
             size: true,
-          })) {
+          }, { uid: true })) {
             const flags = Array.from(msg.flags || []);
             const fromAddr = msg.envelope?.from?.[0] || { name: '', address: '' };
             const toAddrs = (msg.envelope?.to || []).map((t: any) => ({
@@ -260,28 +241,7 @@ export class ImapService {
           }
         }
 
-        // Sort results
-        messages.sort((a, b) => {
-          if (sortField === 'date') {
-            const tA = new Date(a.date).getTime();
-            const tB = new Date(b.date).getTime();
-            return sortOrder === 'desc' ? tB - tA : tA - tB;
-          }
-          if (sortField === 'subject') {
-            return sortOrder === 'desc'
-              ? b.subject.localeCompare(a.subject)
-              : a.subject.localeCompare(b.subject);
-          }
-          if (sortField === 'from') {
-            return sortOrder === 'desc'
-              ? b.from.address.localeCompare(a.from.address)
-              : a.from.address.localeCompare(b.from.address);
-          }
-          if (sortField === 'size') {
-            return sortOrder === 'desc' ? b.size - a.size : a.size - b.size;
-          }
-          return 0;
-        });
+        messages.sort((a, b) => pageUids.indexOf(a.uid) - pageUids.indexOf(b.uid));
 
         const totalPages = Math.ceil(total / pageSize);
         return {
@@ -295,7 +255,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -304,12 +264,10 @@ export class ImapService {
    */
   private checkHasAttachments(structure: any): boolean {
     if (!structure) return false;
+    if (structure.disposition?.toLowerCase() === 'attachment' || structure.dispositionParameters?.filename || structure.parameters?.name) return true;
     if (structure.childNodes && Array.isArray(structure.childNodes)) {
       for (const child of structure.childNodes) {
         if (child.disposition?.toLowerCase() === 'attachment') return true;
-        if (child.type && !['text/plain', 'text/html', 'multipart/alternative'].includes(child.type.toLowerCase())) {
-          return true;
-        }
         if (this.checkHasAttachments(child)) return true;
       }
     }
@@ -383,7 +341,7 @@ export class ImapService {
         return {
           uid,
           messageId: parsed.messageId || `<${uid}@local>`,
-          threadId: parsed.inReplyTo || parsed.messageId || `<${uid}@local>`,
+          threadId: (Array.isArray(parsed.references) ? parsed.references[0] : parsed.references) || parsed.inReplyTo || parsed.messageId || `<${uid}@local>`,
           from: { name: fromAddr.name || fromAddr.address || '', address: fromAddr.address || '' },
           to: toAddrs,
           cc: ccAddrs,
@@ -404,7 +362,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -428,7 +386,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -459,24 +417,32 @@ export class ImapService {
    * Thread conversation retrieval
    */
   async getThread(email: string, threadId: string): Promise<any> {
-    // Collect messages across INBOX and Sent that share threadId
-    const foldersToSearch = ['INBOX', 'Sent'];
-    const matchingMessages: MessageDetailDto[] = [];
+    const foldersToSearch = (await this.listFolders(email)).map(folder => folder.path);
+    const matchingMessages: Array<MessageDetailDto & { folder: string }> = [];
     const participantsMap = new Map<string, string>();
-
-    for (const folder of foldersToSearch) {
-      try {
-        const { data } = await this.listMessages(email, folder, 1, 50);
-        for (const msg of data) {
-          if (msg.threadId === threadId || msg.messageId === threadId) {
-            const detail = await this.getMessage(email, folder, msg.uid);
-            matchingMessages.push(detail);
-            participantsMap.set(detail.from.address, detail.from.name);
-            detail.to.forEach((t) => participantsMap.set(t.address, t.name));
-          }
+    const client = this.createClient(email);
+    try {
+      await client.connect();
+      for (const folder of foldersToSearch) {
+        const lock = await client.getMailboxLock(folder);
+        let uids: number[] = [];
+        try {
+          const found = await client.search({ or: [
+            { header: { 'Message-ID': threadId } },
+            { header: { 'References': threadId } },
+            { header: { 'In-Reply-To': threadId } },
+          ] }, { uid: true });
+          if (Array.isArray(found)) uids = found;
+          else throw new ServiceUnavailableException('Conversation search failed');
+        } finally { lock.release(); }
+        for (const uid of uids.slice(0, Math.max(0, 100 - matchingMessages.length))) {
+          const detail = await this.getMessage(email, folder, uid);
+          matchingMessages.push({ ...detail, folder });
+          participantsMap.set(detail.from.address, detail.from.name);
+          detail.to.forEach(address => participantsMap.set(address.address, address.name));
         }
-      } catch (_) {}
-    }
+      }
+    } finally { await closeMailClient(client); }
 
     matchingMessages.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -489,6 +455,7 @@ export class ImapService {
         address,
       })),
       messageCount: matchingMessages.length,
+      limited: matchingMessages.length >= 100,
     };
   }
 
@@ -521,7 +488,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -547,7 +514,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -578,7 +545,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -590,51 +557,32 @@ export class ImapService {
     await client.connect();
 
     try {
-      // Build RFC 5322 MIME message for draft
-      const to = (draftData.to || []).join(', ');
-      const cc = (draftData.cc || []).join(', ');
-      const bcc = (draftData.bcc || []).join(', ');
-      const subject = draftData.subject || '';
-      const body = draftData.htmlBody || draftData.textBody || '';
+      const MailComposer = require('nodemailer/lib/mail-composer');
+      const composer = new MailComposer({
+        from: email, to: draftData.to, cc: draftData.cc, bcc: draftData.bcc,
+        subject: draftData.subject || '', html: draftData.htmlBody,
+        text: draftData.textBody, keepBcc: true,
+      });
+      const compiled = composer.compile();
+      compiled.keepBcc = true;
+      const mimeBuffer: Buffer = await compiled.build();
+      const lock = await client.getMailboxLock('Drafts');
+      let appendResult: any;
+      try {
+        // Commit the replacement before removing the last durable copy.
+        appendResult = await client.append('Drafts', mimeBuffer, ['\\Draft', '\\Seen']);
+        if (!appendResult || !appendResult.uid) throw new ServiceUnavailableException('Draft could not be saved');
+        if (existingUid) await client.messageDelete(String(existingUid), { uid: true });
+      } finally { lock.release(); }
 
-      const lines = [
-        `From: ${email}`,
-        to ? `To: ${to}` : '',
-        cc ? `Cc: ${cc}` : '',
-        bcc ? `Bcc: ${bcc}` : '',
-        `Subject: ${subject}`,
-        `Date: ${new Date().toUTCString()}`,
-        `Message-ID: <draft-${Date.now()}@${email.split('@')[1]}>`,
-        'MIME-Version: 1.0',
-        'Content-Type: text/html; charset=utf-8',
-        '',
-        body,
-      ].filter((line) => line !== '');
-
-      const mimeBuffer = Buffer.from(lines.join('\r\n'), 'utf-8');
-
-      // If updating existing draft, delete it first
-      if (existingUid) {
-        try {
-          const lock = await client.getMailboxLock('Drafts');
-          try {
-            await client.messageDelete(existingUid.toString(), { uid: true });
-          } finally {
-            lock.release();
-          }
-        } catch (_) {}
-      }
-
-      // Append draft to Drafts folder
-      const appendResult: any = await client.append('Drafts', mimeBuffer, ['\\Draft', '\\Seen']);
       await this.invalidateFoldersCache(email);
 
       return {
-        uid: (appendResult && appendResult.uid) ? appendResult.uid : 1,
+        uid: appendResult.uid,
         folder: 'Drafts',
       };
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -657,6 +605,7 @@ export class ImapService {
         // Parse search query operators
         const searchCriteria: any = {};
         const terms: string[] = [];
+        let attachmentsOnly = false;
 
         const tokens = queryStr.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
         for (const token of tokens) {
@@ -668,14 +617,17 @@ export class ImapService {
             if (key === 'from') searchCriteria.from = val;
             else if (key === 'to') searchCriteria.to = val;
             else if (key === 'subject') searchCriteria.subject = val;
+            else if (key === 'has' && val === 'attachment') attachmentsOnly = true;
             else if (key === 'label') searchCriteria.keyword = `MailHive_${val}`;
             else if (key === 'is') {
               if (val === 'unread') searchCriteria.unseen = true;
               else if (val === 'read') searchCriteria.seen = true;
               else if (val === 'starred') searchCriteria.flagged = true;
             } else if (key === 'before') {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(val) || !Number.isFinite(Date.parse(val))) throw new BadRequestException('Invalid before date');
               searchCriteria.before = new Date(val);
             } else if (key === 'after') {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(val) || !Number.isFinite(Date.parse(val))) throw new BadRequestException('Invalid after date');
               searchCriteria.since = new Date(val);
             }
           } else {
@@ -684,11 +636,19 @@ export class ImapService {
         }
 
         if (terms.length > 0) {
-          searchCriteria.body = terms.join(' ');
+          searchCriteria.text = terms.join(' ').replace(/"/g, '');
         }
 
         // Perform IMAP search
-        const searchUids = await client.search(searchCriteria, { uid: true });
+        let searchUids = await client.search(searchCriteria, { uid: true });
+        if (!Array.isArray(searchUids)) throw new BadRequestException('Mail server rejected the search');
+        if (attachmentsOnly && searchUids.length) {
+          const matches: number[] = [];
+          for await (const message of client.fetch(searchUids.join(','), { uid: true, bodyStructure: true }, { uid: true })) {
+            if (this.checkHasAttachments(message.bodyStructure)) matches.push(message.uid);
+          }
+          searchUids = matches.sort((a, b) => a - b);
+        }
         if (!searchUids || searchUids.length === 0) {
           return { data: [], total: 0, page, pageSize, totalPages: 0 };
         }
@@ -736,7 +696,7 @@ export class ImapService {
         }
 
         return {
-          data: results,
+          data: results.sort((a, b) => pageUids.indexOf(a.uid) - pageUids.indexOf(b.uid)),
           total,
           page,
           pageSize,
@@ -746,7 +706,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -783,7 +743,7 @@ export class ImapService {
         lock.release();
       }
     } finally {
-      await client.logout();
+      await closeMailClient(client);
     }
   }
 
@@ -800,11 +760,14 @@ export class ImapService {
     (async () => {
       try {
         await client.connect();
+        if (!active) { client.close(); return; }
         const lock = await client.getMailboxLock('INBOX');
+        client.on('close', () => { active = false; onEvent({ type: 'disconnected', data: {} }); });
 
         client.on('exists', (data) => {
           if (!active) return;
           this.logger.debug(`[IDLE] New mail in INBOX for ${email}: count ${data.count}`);
+          void this.invalidateFoldersCache(email).catch(() => {});
           onEvent({ type: 'new_mail', data: { count: data.count, prevCount: data.prevCount } });
         });
 
@@ -825,7 +788,8 @@ export class ImapService {
           try {
             await client.idle();
           } catch (idleErr) {
-            if (!active) break;
+            active = false;
+            onEvent({ type: 'disconnected', data: {} });
             this.logger.debug(`IMAP IDLE cycle interrupted: ${idleErr.message}`);
           }
         }
@@ -839,7 +803,7 @@ export class ImapService {
     // Return cleanup function
     return () => {
       active = false;
-      client.logout().catch(() => {});
+      client.close();
     };
   }
 }

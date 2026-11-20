@@ -1,0 +1,13 @@
+.git
+.agents
+.codex
+**/node_modules
+**/.next
+**/dist
+**/test-results
+**/playwright-report
+**/*.tsbuildinfo
+backups
+certs
+.env*
+docs/ui-review

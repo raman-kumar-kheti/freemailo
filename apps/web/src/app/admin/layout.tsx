@@ -24,16 +24,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (pathname === '/admin/login') return;
 
-    const token = api.getToken();
-    if (!token) {
-      router.push('/admin/login');
-      return;
-    }
-
-    try {
-      const stored = localStorage.getItem('mailhive_admin_user');
-      if (stored) setAdminUser(JSON.parse(stored));
-    } catch (_) {}
+    let active = true;
+    api.getMe().then(({ user }) => {
+      if (!active) return;
+      if (!["ADMIN", "SUPER_ADMIN"].includes(user.role)) router.replace('/admin/login');
+      else setAdminUser(user);
+    }).catch(() => { if (active) router.replace('/admin/login'); });
+    return () => { active = false; };
   }, [pathname, router]);
 
   // If on login page, render full screen without dashboard shell

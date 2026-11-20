@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsArray, IsEnum, IsInt, IsNotEmpty, IsString } from 'class-validator';
+import { ArrayMinSize, ArrayMaxSize, Min } from 'class-validator';
 
 export enum FlagAction {
   ADD = 'add',
@@ -15,6 +16,9 @@ export class UpdateFlagsDto {
 
   @ApiProperty({ description: 'Array of message UIDs', type: [Number] })
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @Min(1, { each: true })
   @IsInt({ each: true })
   uids: number[];
 

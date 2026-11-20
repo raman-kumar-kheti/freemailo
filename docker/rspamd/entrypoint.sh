@@ -77,6 +77,13 @@ chmod 640 "${CONFIG_DIR}/worker-controller.inc"
 
 echo "[entrypoint] Permissions set."
 
+# The API worker (UID/GID 5000) writes keys without Docker socket access.
+getent group mailhive-keys >/dev/null || groupadd -g 5000 mailhive-keys
+usermod -a -G mailhive-keys _rspamd
+chgrp -R 5000 "${DKIM_DIR}"
+chmod 2770 "${DKIM_DIR}"
+find "${DKIM_DIR}" -type f -name '*.key' -exec chmod 640 {} \;
+
 # --- 5. Launch Rspamd in the foreground -----------------------------------
 echo "[entrypoint] Starting Rspamd..."
 exec rspamd -f -u _rspamd -g _rspamd

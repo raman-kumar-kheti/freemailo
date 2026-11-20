@@ -73,7 +73,7 @@ export default function MailboxesAdminPage() {
     try {
       const fullEmail = `${newUsername.trim()}@${domainObj.name}`;
       await api.createAdminMailbox({
-        email: fullEmail,
+        localPart: newUsername.trim(),
         password: newPassword,
         quotaBytes: newQuotaMB * 1024 * 1024,
         domainId: newDomainId,

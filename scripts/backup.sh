@@ -1,75 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# ==============================================================================
-# MailHive Automated Backup Pipeline
-# Usage: ./scripts/backup.sh [BACKUP_DIR]
-# ==============================================================================
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
+umask 077
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR="${1:-${ROOT_DIR}/backups}"
-mkdir -p "${BACKUP_DIR}"
-
-TIMESTAMP="$(date +'%Y%m%d_%H%M%S')"
-echo "=================================================="
-echo " Starting MailHive Backup: ${TIMESTAMP}"
-echo " Backup Destination: ${BACKUP_DIR}"
-echo "=================================================="
-
+mkdir -p "$BACKUP_DIR"
+BACKUP_DIR="$(cd "$BACKUP_DIR" && pwd)"
+TIMESTAMP="$(date -u +'%Y%m%d_%H%M%S')"
+DB_CONTAINER="${DB_CONTAINER:-mailhive-postgres}"
+MAIL_CONTAINER="${MAIL_CONTAINER:-mailhive-dovecot}"
+RSPAMD_CONTAINER="${RSPAMD_CONTAINER:-mailhive-rspamd}"
+# Take an application-consistent snapshot while all mail/API writers are stopped.
+# Postgres remains online for pg_dump. Never restore onto the live stack in tests.
+WRITERS=(mailhive-api mailhive-postfix "$MAIL_CONTAINER" "$RSPAMD_CONTAINER")
+RUNNING=()
+for container in "${WRITERS[@]}"; do
+  if [ "$(docker inspect -f '{{.State.Running}}' "$container")" = true ]; then RUNNING+=("$container"); fi
+done
+resume() { if [ "${#RUNNING[@]}" -gt 0 ]; then docker start "${RUNNING[@]}" >/dev/null; fi; }
+trap resume EXIT
+if [ "${#RUNNING[@]}" -gt 0 ]; then docker stop -t 30 "${RUNNING[@]}" >/dev/null; fi
 DB_FILE="mailhive_db_${TIMESTAMP}.sql.gz"
 VMAIL_FILE="mailhive_vmail_${TIMESTAMP}.tar.gz"
-META_FILE="mailhive_backup_${TIMESTAMP}.json"
-SHA_FILE="mailhive_backup_${TIMESTAMP}.sha256"
-
-# 1. Backup PostgreSQL
-echo "[1/3] Dumping PostgreSQL database..."
-docker exec mailhive-postgres pg_dump -U mailhive -d mailhive --clean --if-exists | gzip > "${BACKUP_DIR}/${DB_FILE}"
-DB_SIZE=$(stat -c%s "${BACKUP_DIR}/${DB_FILE}" 2>/dev/null || stat -f%z "${BACKUP_DIR}/${DB_FILE}")
-echo "      PostgreSQL dump complete: ${DB_FILE} (${DB_SIZE} bytes)"
-
-# 2. Backup Maildir (/var/vmail)
-echo "[2/3] Archiving Maildir storage..."
-docker run --rm \
-  -v mail-service_vmail:/vmail:ro \
-  -v "${BACKUP_DIR}":/backup \
-  alpine tar -czf "/backup/${VMAIL_FILE}" -C /vmail .
-VMAIL_SIZE=$(stat -c%s "${BACKUP_DIR}/${VMAIL_FILE}" 2>/dev/null || stat -f%z "${BACKUP_DIR}/${VMAIL_FILE}")
-echo "      Maildir archive complete: ${VMAIL_FILE} (${VMAIL_SIZE} bytes)"
-
-# 3. Generate Checksums and Metadata
-echo "[3/3] Generating SHA256 checksums & metadata..."
-cd "${BACKUP_DIR}"
-sha256sum "${DB_FILE}" "${VMAIL_FILE}" > "${SHA_FILE}"
-
-DB_SHA=$(sha256sum "${DB_FILE}" | awk '{print $1}')
-VMAIL_SHA=$(sha256sum "${VMAIL_FILE}" | awk '{print $1}')
-
-cat <<EOF > "${META_FILE}"
-{
-  "timestamp": "${TIMESTAMP}",
-  "created_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "database": {
-    "filename": "${DB_FILE}",
-    "bytes": ${DB_SIZE},
-    "sha256": "${DB_SHA}"
-  },
-  "vmail": {
-    "filename": "${VMAIL_FILE}",
-    "bytes": ${VMAIL_SIZE},
-    "sha256": "${VMAIL_SHA}"
-  }
-}
-EOF
-
-# Update symlink for latest backup
-ln -sf "${META_FILE}" "latest.json"
-
-echo "=================================================="
-echo " MailHive Backup Successfully Completed!"
-echo " DB:       ${BACKUP_DIR}/${DB_FILE}"
-echo " Vmail:    ${BACKUP_DIR}/${VMAIL_FILE}"
-echo " Metadata: ${BACKUP_DIR}/${META_FILE}"
-echo " Checksum: ${BACKUP_DIR}/${SHA_FILE}"
-echo "=================================================="
+DKIM_FILE="mailhive_rspamd_${TIMESTAMP}.tar.gz"
+docker exec "$DB_CONTAINER" sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --no-acl' | gzip > "$BACKUP_DIR/$DB_FILE"
+docker run --rm --volumes-from "$MAIL_CONTAINER":ro alpine:3.22 tar -czf - -C /var/vmail . > "$BACKUP_DIR/$VMAIL_FILE"
+docker run --rm --volumes-from "$RSPAMD_CONTAINER":ro alpine:3.22 tar -czf - -C /var/lib/rspamd . > "$BACKUP_DIR/$DKIM_FILE"
+cd "$BACKUP_DIR"
+sha256sum "$DB_FILE" "$VMAIL_FILE" "$DKIM_FILE" > "mailhive_backup_${TIMESTAMP}.sha256"
+printf '{"timestamp":"%s","format":2,"includes":["database","maildir","rspamd"],"queue_policy":"retain live Redis and Postfix volumes; reconcile pending SQL jobs after disaster"}\n' "$TIMESTAMP" > "mailhive_backup_${TIMESTAMP}.json"
+ln -sfn "mailhive_backup_${TIMESTAMP}.json" latest.json
+printf 'Backup verified and saved: %s/%s\n' "$BACKUP_DIR" "$TIMESTAMP"
+sha256sum -c "mailhive_backup_${TIMESTAMP}.sha256"

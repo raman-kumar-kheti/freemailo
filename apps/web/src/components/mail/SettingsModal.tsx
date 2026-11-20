@@ -30,13 +30,22 @@ export function SettingsModal({
   initialTab = "profile",
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<
-    "profile" | "signatures" | "labels" | "trusted"
+    "profile" | "signatures" | "labels" | "trusted" | "password" | "vacation"
   >("profile");
 
   const [notice, setNotice] = useState("");
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("#18786b");
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [vacation, setVacation] = useState({ isActive: false, subject: "Out of office", body: "", startDate: "", endDate: "" });
+  useEffect(() => {
+    if (activeTab !== "vacation" || !isOpen) return;
+    api.getVacation().then(value => setVacation({ isActive: value.isActive, subject: value.subject || "Out of office", body: value.body || "", startDate: value.startDate?.slice(0, 10) || "", endDate: value.endDate?.slice(0, 10) || "" })).catch(() => setNotice("Couldn’t load vacation settings."));
+  }, [activeTab, isOpen]);
 
   // Profile state
   const [displayName, setDisplayName] = useState(user?.displayName || "");
@@ -191,6 +200,8 @@ export function SettingsModal({
             { id: "signatures", label: "Signatures", icon: PenTool },
             { id: "labels", label: "Labels", icon: Tag },
             { id: "trusted", label: "Trusted Senders", icon: Shield },
+            { id: "password", label: "Password", icon: Shield },
+            { id: "vacation", label: "Vacation", icon: User },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -221,6 +232,33 @@ export function SettingsModal({
         )}
         {/* Tab Contents */}
         <div className="p-6 flex-1 overflow-y-auto text-sm">
+          {activeTab === "password" && <form className="space-y-4 max-w-md" onSubmit={async event => {
+            event.preventDefault(); setSettingsSaving(true);
+            try { await api.changePassword(currentPassword, newPassword); setCurrentPassword(""); setNewPassword(""); setNotice("Password updated. Sign in again to renew your session."); }
+            catch (error) { setNotice(error instanceof Error ? error.message : "Could not update password"); }
+            finally { setSettingsSaving(false); }
+          }}>
+            <label className="block">Current password<input aria-label="Current password" type="password" autoComplete="current-password" required value={currentPassword} onChange={event => setCurrentPassword(event.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+            <label className="block">New password<input aria-label="New password" type="password" autoComplete="new-password" minLength={8} required value={newPassword} onChange={event => setNewPassword(event.target.value)} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+            <button disabled={settingsSaving} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">{settingsSaving ? "Updating…" : "Update password"}</button>
+          </form>}
+          {activeTab === "vacation" && <form className="space-y-4 max-w-md" onSubmit={async event => {
+            event.preventDefault(); setSettingsSaving(true);
+            try { await api.saveVacation({ ...vacation, startDate: vacation.startDate || undefined, endDate: vacation.endDate || undefined }); setNotice("Vacation settings applied to your mailbox."); }
+            catch (error) { setNotice(error instanceof Error ? error.message : "Could not update vacation settings"); }
+            finally { setSettingsSaving(false); }
+          }}>
+            <label className="flex items-center gap-2"><input type="checkbox" checked={vacation.isActive} onChange={event => setVacation({ ...vacation, isActive: event.target.checked })} />Send vacation replies</label>
+            <label className="block">Reply subject<input aria-label="Vacation subject" required value={vacation.subject} onChange={event => setVacation({ ...vacation, subject: event.target.value })} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+            <label className="block">Reply message<textarea aria-label="Vacation message" required value={vacation.body} onChange={event => setVacation({ ...vacation, body: event.target.value })} className="mt-1 min-h-24 w-full rounded-lg border bg-background p-2" /></label>
+            <div className="grid grid-cols-2 gap-3">
+              <label>Start date (UTC)<input aria-label="Vacation start date" type="date" value={vacation.startDate} onChange={event => setVacation({ ...vacation, startDate: event.target.value })} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+              <label>End date (UTC)<input aria-label="Vacation end date" type="date" value={vacation.endDate} onChange={event => setVacation({ ...vacation, endDate: event.target.value })} className="mt-1 w-full rounded-lg border bg-background p-2" /></label>
+            </div>
+            <p className="text-xs text-muted-foreground">Replies are sent at most once a day per sender. The end date is exclusive.</p>
+            <button disabled={settingsSaving} className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">{settingsSaving ? "Saving…" : "Save vacation settings"}</button>
+          </form>}
+
           {/* PROFILE TAB */}
           {activeTab === "profile" && (
             <form onSubmit={handleSaveProfile} className="space-y-4 max-w-md">

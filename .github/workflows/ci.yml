@@ -1,0 +1,31 @@
+name: MailHive checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+      - run: npm ci && npm --prefix apps/api ci && npm --prefix apps/web ci
+      - run: bash scripts/generate-prisma.sh
+      - run: npm run lint && npm run typecheck && npm test && npm run build
+      - run: npm --prefix apps/api audit --audit-level=moderate && npm --prefix apps/web audit --audit-level=moderate
+      - run: cd apps/web && npx playwright install --with-deps chromium
+      - name: Populated mailbox UI and accessibility regression
+        run: |
+          npm --prefix apps/web start > /tmp/web.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:3000/login > /dev/null && break; sleep 1; done
+          npm --prefix apps/web run test:ui -- --workers=1
+      - name: Build deployable images
+        run: docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml build

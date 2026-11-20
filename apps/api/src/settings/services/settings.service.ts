@@ -1,3 +1,4 @@
+import { SieveService } from './sieve.service';
 import {
   Injectable,
   NotFoundException,
@@ -16,7 +17,7 @@ import { VacationResponderDto } from '../dto/vacation.dto';
 export class SettingsService {
   private readonly logger = new Logger(SettingsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly sieve: SieveService) {}
 
   async getProfile(mailboxId: string) {
     const mailbox = await this.prisma.mailbox.findUnique({
@@ -119,10 +120,10 @@ export class SettingsService {
     });
     const formattedHash = `{ARGON2ID}${rawHash}`;
 
-    await this.prisma.mailbox.update({
-      where: { id: mailboxId },
-      data: { passwordHash: formattedHash },
-    });
+    await this.prisma.$transaction([
+      this.prisma.mailbox.update({ where: { id: mailboxId }, data: { passwordHash: formattedHash } }),
+      this.prisma.refreshToken.updateMany({ where: { mailboxId, revokedAt: null }, data: { revokedAt: new Date() } }),
+    ]);
   }
 
   async listLabels(mailboxId: string) {
@@ -185,6 +186,8 @@ export class SettingsService {
   }
 
   async saveVacationResponder(mailboxId: string, dto: VacationResponderDto) {
+    const mailbox = await this.prisma.mailbox.findUniqueOrThrow({ where: { id: mailboxId } });
+    await this.sieve.setVacation(mailbox.email, dto);
     return this.prisma.vacationResponder.upsert({
       where: { mailboxId },
       create: {
@@ -247,7 +250,7 @@ export class SettingsService {
     const contacts = await this.prisma.contact.findMany({
       where: whereClause,
       orderBy: [{ contactCount: 'desc' }, { lastContactedAt: 'desc' }],
-      take: Math.min(limit, 50),
+      take: Math.min(Math.max(Math.floor(limit) || 10, 1), 50),
     });
 
     return { contacts };

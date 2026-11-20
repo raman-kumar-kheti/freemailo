@@ -8,8 +8,11 @@ jest.mock("dompurify", () => () => ({ sanitize: (html: string) => html }));
 
 describe("IMAP label search for the webmail UI", () => {
   it("searches the stable label keyword and preserves pagination and unread filters", async () => {
+    process.env.DOVECOT_MASTER_PASSWORD = "test-only";
     const release = jest.fn();
     const client = {
+      on: jest.fn(),
+      close: jest.fn(),
       connect: jest.fn(),
       logout: jest.fn(),
       getMailboxLock: jest.fn().mockResolvedValue({ release }),

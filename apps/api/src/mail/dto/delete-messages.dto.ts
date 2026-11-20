@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ArrayMinSize, ArrayMaxSize, Min } from 'class-validator';
 
 export class DeleteMessagesDto {
   @ApiProperty({ description: 'Folder name', example: 'INBOX' })
@@ -9,6 +10,9 @@ export class DeleteMessagesDto {
 
   @ApiProperty({ description: 'Array of message UIDs', type: [Number] })
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @Min(1, { each: true })
   @IsInt({ each: true })
   uids: number[];
 

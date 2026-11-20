@@ -1,4 +1,6 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { createMailClient, closeMailClient } from '../mail/services/mail-connection';
+import { accessTokenSeconds, refreshTokenSeconds } from './token-lifetime';
+import { Injectable, UnauthorizedException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
@@ -47,14 +49,18 @@ export class AuthService {
       include: { domain: true },
     });
 
-    if (!mailbox || !mailbox.isActive || mailbox.deletedAt) {
+    if (!mailbox || !mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
-    const isValid = await this.verifyPassword(mailbox.passwordHash, dto.password);
-    if (!isValid) {
-      throw new UnauthorizedException('Invalid email or password');
-    }
+    // Dovecot is the mailbox authentication authority; database hashes are used
+    // directly only for the separate administrator identity.
+    const client = createMailClient(mailbox.email, dto.password);
+    try { await client.connect(); }
+    catch (error) {
+      if (error.authenticationFailed || /Authentication/i.test(error.code || '')) throw new UnauthorizedException('Invalid email or password');
+      throw new ServiceUnavailableException('Mailbox authentication is temporarily unavailable');
+    } finally { await closeMailClient(client); }
 
     // Update last login
     await this.prisma.mailbox.update({
@@ -76,7 +82,7 @@ export class AuthService {
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      expiresIn: 900, // 15 mins
+      expiresIn: accessTokenSeconds(), // 15 mins
       user: {
         id: mailbox.id,
         email: mailbox.email,
@@ -122,7 +128,7 @@ export class AuthService {
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      expiresIn: 900,
+      expiresIn: accessTokenSeconds(),
       user: {
         id: admin.id,
         email: admin.email,
@@ -144,27 +150,19 @@ export class AuthService {
 
     const tokenRecord = await this.prisma.refreshToken.findUnique({
       where: { token: hashedToken },
-      include: { mailbox: true, adminUser: true },
+      include: { mailbox: { include: { domain: true } }, adminUser: true },
     });
 
     if (!tokenRecord || tokenRecord.revokedAt || new Date() > tokenRecord.expiresAt) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    // Revoke old token (rotation)
-    await this.prisma.refreshToken.update({
-      where: { id: tokenRecord.id },
-      data: { revokedAt: new Date() },
-    });
-
     let payload: any;
-    let userId: string | null = null;
     let adminId: string | null = null;
     let mailboxId: string | null = null;
 
     if (tokenRecord.adminUserId && tokenRecord.adminUser) {
       adminId = tokenRecord.adminUserId;
-      userId = adminId;
       payload = {
         sub: tokenRecord.adminUser.id,
         email: tokenRecord.adminUser.email,
@@ -173,8 +171,11 @@ export class AuthService {
         isAdmin: true,
       };
     } else if (tokenRecord.mailboxId && tokenRecord.mailbox) {
+      const mailbox = tokenRecord.mailbox;
+      if (!mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
+        throw new UnauthorizedException('Mailbox account inactive');
+      }
       mailboxId = tokenRecord.mailboxId;
-      userId = mailboxId;
       payload = {
         sub: tokenRecord.mailbox.id,
         email: tokenRecord.mailbox.email,
@@ -187,12 +188,24 @@ export class AuthService {
     }
 
     const newTokens = await this.generateTokens(payload);
-    await this.storeRefreshToken(mailboxId, adminId, newTokens.refreshToken, ipAddress, userAgent);
+    // Compare-and-set inside a transaction: concurrent use can rotate only once.
+    await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.refreshToken.updateMany({
+        where: { id: tokenRecord.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        data: { revokedAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new UnauthorizedException('Refresh token already used');
+      await tx.refreshToken.create({ data: {
+        token: crypto.createHash('sha256').update(newTokens.refreshToken).digest('hex'),
+        mailboxId, adminUserId: adminId, expiresAt: new Date(Date.now() + refreshTokenSeconds() * 1000),
+        ipAddress, deviceInfo: userAgent,
+      } });
+    });
 
     return {
       accessToken: newTokens.accessToken,
       refreshToken: newTokens.refreshToken,
-      expiresIn: 900,
+      expiresIn: accessTokenSeconds(),
     };
   }
 
@@ -210,7 +223,7 @@ export class AuthService {
 
   private async generateTokens(payload: any) {
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: this.configService.get<string>('JWT_ACCESS_EXPIRY', '15m'),
+      expiresIn: accessTokenSeconds(),
     });
     const refreshToken = crypto.randomBytes(40).toString('hex');
     return { accessToken, refreshToken };
@@ -225,7 +238,7 @@ export class AuthService {
   ) {
     const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
+    expiresAt.setTime(Date.now() + refreshTokenSeconds() * 1000); // 7 days
 
     await this.prisma.refreshToken.create({
       data: {

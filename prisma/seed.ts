@@ -4,7 +4,8 @@ import * as argon2 from 'argon2';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Seeding database...');
+  if (process.env.NODE_ENV === 'production' || process.env.SEED_DEVELOPMENT !== 'true') throw new Error('Development seed requires SEED_DEVELOPMENT=true and is disabled in production');
+  console.log('🌱 Seeding development database...');
 
   // Create admin user
   const adminPasswordHash = `{ARGON2ID}${await argon2.hash('admin123456', {
@@ -13,7 +14,7 @@ async function main() {
 
   const admin = await prisma.adminUser.upsert({
     where: { email: 'admin@mailhive.local' },
-    update: { passwordHash: adminPasswordHash },
+    update: {},
     create: {
       email: 'admin@mailhive.local',
       passwordHash: adminPasswordHash,
@@ -30,9 +31,9 @@ async function main() {
     create: {
       name: 'example.test',
       isActive: true,
-      isVerified: true,
-      mxVerified: true,
-      spfVerified: true,
+      isVerified: false,
+      mxVerified: false,
+      spfVerified: false,
       dkimVerified: false,
       dmarcVerified: false,
       dkimSelector: 'mailhive',
@@ -50,7 +51,7 @@ async function main() {
 
   const alice = await prisma.mailbox.upsert({
     where: { email: 'alice@example.test' },
-    update: { passwordHash: aliceHash },
+    update: {},
     create: {
       localPart: 'alice',
       domainId: domain.id,
@@ -65,7 +66,7 @@ async function main() {
 
   const bob = await prisma.mailbox.upsert({
     where: { email: 'bob@example.test' },
-    update: { passwordHash: bobHash },
+    update: {},
     create: {
       localPart: 'bob',
       domainId: domain.id,

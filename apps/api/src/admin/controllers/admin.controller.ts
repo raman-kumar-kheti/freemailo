@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ParseIntPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminService } from '../services/admin.service';
@@ -23,6 +24,13 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles, UserRole } from '../../common/decorators/roles.decorator';
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+
+function paginationNumber(value: unknown, fallback: number, maximum: number): number {
+  if (value === undefined || value === '') return fallback;
+  const result = Number(value);
+  if (!Number.isSafeInteger(result) || result < 1 || result > maximum) throw new BadRequestException('Invalid pagination');
+  return result;
+}
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -46,7 +54,7 @@ export class AdminController {
     @Query('pageSize') pageSize?: number,
     @Query('search') search?: string,
   ) {
-    return this.adminService.listDomains(Number(page) || 1, Number(pageSize) || 50, search);
+    return this.adminService.listDomains(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), search);
   }
 
   @Post('domains')
@@ -101,8 +109,8 @@ export class AdminController {
     @Query('search') search?: string,
   ) {
     return this.adminService.listMailboxes(
-      Number(page) || 1,
-      Number(pageSize) || 50,
+      paginationNumber(page, 1, 100000),
+      paginationNumber(pageSize, 50, 100),
       domainId,
       search,
     );
@@ -155,7 +163,7 @@ export class AdminController {
     @Query('pageSize') pageSize?: number,
     @Query('domainId') domainId?: string,
   ) {
-    return this.adminService.listAliases(Number(page) || 1, Number(pageSize) || 50, domainId);
+    return this.adminService.listAliases(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), domainId);
   }
 
   @Post('aliases')
@@ -189,7 +197,7 @@ export class AdminController {
     @Query('pageSize') pageSize?: number,
     @Query('status') status?: any,
   ) {
-    return this.provisioning.listJobs(Number(page) || 1, Number(pageSize) || 50, status);
+    return this.provisioning.listJobs(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), status);
   }
 
   @Get('jobs/:id')
@@ -205,6 +213,6 @@ export class AdminController {
     @Query('pageSize') pageSize?: number,
     @Query('action') action?: string,
   ) {
-    return this.adminService.getAuditLogs(Number(page) || 1, Number(pageSize) || 50, action);
+    return this.adminService.getAuditLogs(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), action);
   }
 }

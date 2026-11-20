@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import {
   Search,
@@ -83,7 +84,7 @@ export function Navbar({
           >
             <MenuIcon size={21} />
           </IconButton>
-          <a
+          <Link
             href="/"
             aria-label="MailHive home"
             className="flex items-center gap-2.5 rounded-lg"
@@ -95,7 +96,7 @@ export function Navbar({
               Mail
               <span className="font-normal text-muted-foreground">Hive</span>
             </span>
-          </a>
+          </Link>
         </div>
         <form
           role="search"

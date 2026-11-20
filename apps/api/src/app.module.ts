@@ -15,7 +15,7 @@ import { HealthModule } from './health/health.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.dev', '../../.env.dev', '.env', '../../.env'],
+      envFilePath: process.env.NODE_ENV === 'production' ? ['.env'] : ['.env', '../../.env', '.env.dev', '../../.env.dev'],
     }),
     ThrottlerModule.forRoot([
       {

@@ -1,11 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProvisionJobType, ProvisionJobStatus } from '@prisma/client';
 
 @Injectable()
-export class ProvisioningService {
+export class ProvisioningService implements OnModuleInit, OnModuleDestroy {
+  private recoveryTimer?: ReturnType<typeof setInterval>;
+  private recovering = false;
   private readonly logger = new Logger(ProvisioningService.name);
 
   constructor(
@@ -13,6 +15,32 @@ export class ProvisioningService {
     @InjectQueue('provisioning-dlq') private dlqQueue: Queue,
     private prisma: PrismaService,
   ) {}
+
+  async onModuleInit() {
+    await this.reconcile().catch(() => this.logger.warn('Provisioning recovery will retry'));
+    this.recoveryTimer = setInterval(() => void this.reconcile().catch(() => this.logger.warn('Provisioning recovery will retry')), 30000);
+    this.recoveryTimer.unref();
+  }
+
+  onModuleDestroy() { if (this.recoveryTimer) clearInterval(this.recoveryTimer); }
+
+  async reconcile() {
+    if (this.recovering) return;
+    this.recovering = true;
+    try {
+      const records = await this.prisma.provisionJob.findMany({
+        where: { status: { in: ['PENDING', 'PROCESSING', 'FAILED'] } }, take: 100,
+        orderBy: { createdAt: 'asc' },
+      });
+      for (const record of records) {
+        if (!await this.provisioningQueue.getJob(record.id)) {
+          await this.provisioningQueue.add(record.type, { ...(record.payload as object), jobRecordId: record.id }, {
+            jobId: record.id, attempts: record.maxAttempts, backoff: { type: 'exponential', delay: 2000 }, removeOnComplete: 100, removeOnFail: false,
+          });
+        }
+      }
+    } finally { this.recovering = false; }
+  }
 
   /**
    * Enqueue a provisioning job with exponential backoff and database tracking.
@@ -29,26 +57,9 @@ export class ProvisioningService {
       },
     });
 
-    // 2. Add to BullMQ with exponential backoff
-    const bullJob = await this.provisioningQueue.add(
-      type,
-      {
-        jobRecordId: jobRecord.id,
-        ...payload,
-      },
-      {
-        jobId: jobRecord.id, // idempotent job ID
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 2000, // 2s, 4s, 8s, 16s, 32s
-        },
-        removeOnComplete: 100,
-        removeOnFail: false,
-      },
-    );
-
-    this.logger.log(`Enqueued provisioning job ${type} [DB ID: ${jobRecord.id}, BullMQ ID: ${bullJob.id}]`);
+    // The durable SQL record remains pending if Redis is unavailable; the
+    // reconciler delivers it after recovery instead of losing the operation.
+    await this.reconcile().catch(() => this.logger.warn(`Provisioning job ${jobRecord.id} awaits queue recovery`));
     return jobRecord;
   }
 
@@ -60,6 +71,7 @@ export class ProvisioningService {
 
   async listJobs(page = 1, pageSize = 50, status?: ProvisionJobStatus) {
     const skip = (page - 1) * pageSize;
+    if (status && !Object.values(ProvisionJobStatus).includes(status)) throw new BadRequestException('Invalid job status');
     const where = status ? { status } : {};
 
     const [data, total] = await Promise.all([

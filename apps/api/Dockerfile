@@ -1,46 +1,22 @@
-FROM node:20-alpine AS builder
-
+FROM node:24.15-alpine AS builder
 WORKDIR /app
-
 RUN apk add --no-cache openssl
-
-# Copy root prisma schema for generation
-COPY prisma ./prisma/
-
-# Copy api package files
-COPY apps/api/package*.json ./apps/api/
-COPY apps/api/tsconfig*.json ./apps/api/
-COPY apps/api/nest-cli.json ./apps/api/
-
-WORKDIR /app/apps/api
-RUN npm install
-
-# Copy api source
+COPY apps/api/package*.json ./
+RUN npm ci
+COPY prisma ./prisma
+RUN npx prisma generate --schema=prisma/schema.prisma
+COPY apps/api/tsconfig*.json apps/api/nest-cli.json ./
 COPY apps/api/src ./src
+RUN npm run build && npm prune --omit=dev
 
-# Generate prisma client
-RUN npx prisma generate --schema=../../prisma/schema.prisma && \
-    cp -r /app/node_modules/.prisma /app/apps/api/node_modules/ 2>/dev/null || true
-
-# Build nestjs
-RUN npm run build
-
-# Runner stage
-FROM node:20-alpine AS runner
-
+FROM node:24.15-alpine AS runner
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=4000
-
-# Install docker CLI and openssl
-RUN apk add --no-cache docker-cli openssl
-
-COPY --from=builder /app/apps/api/package*.json ./
-COPY --from=builder /app/apps/api/node_modules ./node_modules
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/prisma ./prisma
-
+ENV NODE_ENV=production PORT=4000
+RUN apk add --no-cache openssl && addgroup -g 5000 mailhive && adduser -D -u 5000 -G mailhive mailhive
+COPY --from=builder --chown=5000:5000 /app/node_modules ./node_modules
+COPY --from=builder --chown=5000:5000 /app/dist ./dist
+COPY --from=builder --chown=5000:5000 /app/prisma ./prisma
+COPY --from=builder --chown=5000:5000 /app/package*.json ./
+USER 5000:5000
 EXPOSE 4000
-
 CMD ["node", "dist/main.js"]

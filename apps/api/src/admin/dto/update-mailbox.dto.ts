@@ -1,4 +1,5 @@
 import { IsOptional, IsString, IsBoolean, IsNumber, MinLength } from 'class-validator';
+import { Min, Max, IsInt } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateMailboxDto {
@@ -14,7 +15,9 @@ export class UpdateMailboxDto {
   password?: string;
 
   @ApiProperty({ example: 2147483648, required: false })
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
   @IsOptional()
   quotaBytes?: number;
 

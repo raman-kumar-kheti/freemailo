@@ -5,34 +5,40 @@
 ###############################################################################
 
 services:
+  api:
+    environment:
+      NODE_ENV: development
+      APP_URL: http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3001
+      COOKIE_SECURE: "false"
+      MAIL_TLS_REJECT_UNAUTHORIZED: "false"
   # ---------------------------------------------------------------------------
   # PostgreSQL – expose to host for local tooling (pgAdmin, psql, etc.)
   # ---------------------------------------------------------------------------
   postgres:
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_LOG_STATEMENT: all
       POSTGRES_INITDB_ARGS: "--auth-host=md5"
     command: >
       postgres
-        -c log_statement=all
+        -c log_statement=none
         -c log_connections=on
         -c log_disconnections=on
-        -c log_min_duration_statement=0
+        -c log_min_duration_statement=1000
 
   # ---------------------------------------------------------------------------
   # Redis – expose to host for redis-cli / RedisInsight
   # ---------------------------------------------------------------------------
   redis:
     ports:
-      - "6380:6379"
+      - "127.0.0.1:6380:6379"
     command: >
       redis-server
         --requirepass ${REDIS_PASSWORD}
         --appendonly yes
         --maxmemory 256mb
-        --maxmemory-policy allkeys-lru
+        --maxmemory-policy noeviction
         --loglevel verbose
 
   # ---------------------------------------------------------------------------
@@ -54,7 +60,7 @@ services:
     ports:
       - "993:993"
       - "4190:4190"
-      - "24:24"
+      - "127.0.0.1:24:24"
     environment:
       DOVECOT_LOG_LEVEL: debug
     volumes:
@@ -67,8 +73,8 @@ services:
   # ---------------------------------------------------------------------------
   rspamd:
     ports:
-      - "11334:11334"
-      - "11332:11332"
+      - "127.0.0.1:11334:11334"
+      - "127.0.0.1:11332:11332"
     environment:
       RSPAMD_LOG_LEVEL: debug
     volumes:

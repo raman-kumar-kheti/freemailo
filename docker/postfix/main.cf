@@ -50,7 +50,8 @@ smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
 # SASL Authentication via Dovecot
 smtpd_sasl_type = dovecot
 smtpd_sasl_path = inet:dovecot:12345
-smtpd_sasl_auth_enable = yes
+smtpd_sasl_auth_enable = no
+smtpd_tls_auth_only = yes
 smtpd_sasl_security_options = noanonymous
 smtpd_sasl_local_domain = $mydomain
 broken_sasl_auth_clients = yes
@@ -88,7 +89,7 @@ smtpd_relay_restrictions =
 smtpd_milters = inet:rspamd:11332
 non_smtpd_milters = inet:rspamd:11332
 milter_protocol = 6
-milter_default_action = accept
+milter_default_action = tempfail
 milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
 
 # Rate limiting

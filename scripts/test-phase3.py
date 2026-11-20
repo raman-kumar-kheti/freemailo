@@ -244,14 +244,14 @@ def main():
         sse_res = requests.get(f"{API_BASE}/mail/events", headers=headers_alice, stream=True, timeout=3)
         if sse_res.status_code == 200 and "text/event-stream" in sse_res.headers.get("Content-Type", ""):
             print("✅ SSE stream opened with Content-Type: text/event-stream")
-            for line in sse_res.iter_lines(decode_unicode=True):
+            for line in sse_res.iter_lines(chunk_size=1, decode_unicode=True):
                 if line:
                     print(f"   Received SSE initial frame: {line}")
                     break
         else:
-            print(f"⚠️ SSE status {sse_res.status_code}")
+            raise AssertionError(f"SSE status {sse_res.status_code}")
     except requests.exceptions.Timeout:
-        print("✅ SSE stream verified (connected and held open)")
+        raise AssertionError("SSE did not produce a frame before timeout")
 
     print("\n==================================================================")
     print("      🎉 ALL PHASE 3 ACCEPTANCE CRITERIA VERIFIED SUCCESSFULLY!   ")

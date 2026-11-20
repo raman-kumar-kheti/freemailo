@@ -1,78 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-# ==============================================================================
-# MailHive Automated Restore Pipeline
-# Usage: ./scripts/restore.sh [TIMESTAMP|latest] [BACKUP_DIR]
-# ==============================================================================
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-
+umask 077
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${1:-latest}"
 BACKUP_DIR="${2:-${ROOT_DIR}/backups}"
-
-if [ ! -d "${BACKUP_DIR}" ]; then
-  echo "Error: Backup directory ${BACKUP_DIR} does not exist!" >&2
-  exit 1
+cd "$BACKUP_DIR"
+if [ "$TARGET" = latest ]; then
+  TARGET="$(basename "$(readlink latest.json)" .json)"
+  TARGET="${TARGET#mailhive_backup_}"
 fi
-
-cd "${BACKUP_DIR}"
-
-if [ "${TARGET}" = "latest" ]; then
-  if [ -f "latest.json" ]; then
-    META_FILE="$(readlink -f "latest.json" 2>/dev/null || readlink "latest.json")"
-  else
-    META_FILE="$(ls -t mailhive_backup_*.json 2>/dev/null | head -n 1 || true)"
-  fi
-else
-  META_FILE="mailhive_backup_${TARGET}.json"
+[[ "$TARGET" =~ ^[0-9]{8}_[0-9]{6}$ ]] || { echo 'Invalid backup timestamp' >&2; exit 1; }
+# Require valid checksums before performing any mutation.
+sha256sum -c "mailhive_backup_${TARGET}.sha256"
+for archive in "mailhive_vmail_${TARGET}.tar.gz" "mailhive_rspamd_${TARGET}.tar.gz"; do tar -tzf "$archive" >/dev/null; done
+gzip -t "mailhive_db_${TARGET}.sql.gz"
+if [ "${RESTORE_CONFIRM:-}" != replace-stopped-stack ]; then
+  echo 'Verified backup. To replace a stopped stack, set RESTORE_CONFIRM=replace-stopped-stack.' >&2
+  exit 2
 fi
-
-if [ -z "${META_FILE:-}" ] || [ ! -f "${META_FILE}" ]; then
-  echo "Error: Backup metadata file ${META_FILE:-} not found in ${BACKUP_DIR}!" >&2
-  exit 1
-fi
-
-TIMESTAMP=$(basename "${META_FILE}" | sed -e 's/mailhive_backup_//' -e 's/\.json//')
-DB_FILE="mailhive_db_${TIMESTAMP}.sql.gz"
-VMAIL_FILE="mailhive_vmail_${TIMESTAMP}.tar.gz"
-SHA_FILE="mailhive_backup_${TIMESTAMP}.sha256"
-
-echo "=================================================="
-echo " Starting MailHive Restore: ${TIMESTAMP}"
-echo " Source Directory: ${BACKUP_DIR}"
-echo "=================================================="
-
-# 1. Verify Checksums
-echo "[1/3] Verifying SHA256 checksums..."
-if [ -f "${SHA_FILE}" ]; then
-  sha256sum -c "${SHA_FILE}"
-else
-  echo "Warning: Checksum file ${SHA_FILE} not found, verifying files exist..."
-  test -f "${DB_FILE}"
-  test -f "${VMAIL_FILE}"
-fi
-echo "      Integrity check PASSED."
-
-# 2. Restore PostgreSQL Database
-echo "[2/3] Restoring PostgreSQL database..."
-gunzip -c "${DB_FILE}" | docker exec -i mailhive-postgres psql -U mailhive -d mailhive -q
-echo "      PostgreSQL restore complete."
-
-# 3. Restore Maildir Storage (/var/vmail)
-echo "[3/3] Restoring Maildir storage..."
-docker run --rm \
-  -v mail-service_vmail:/vmail \
-  -v "${BACKUP_DIR}":/backup \
-  alpine sh -c "rm -rf /vmail/* && tar -xzf /backup/${VMAIL_FILE} -C /vmail && chown -R 5000:5000 /vmail"
-echo "      Maildir restore complete."
-
-# Flush Dovecot auth / connection caches & resync indexes
-docker exec mailhive-dovecot doveadm auth cache flush 2>/dev/null || true
-docker exec mailhive-dovecot doveadm force-resync -A '*' 2>/dev/null || true
-
-echo "=================================================="
-echo " MailHive Restore Successfully Completed!"
-echo " Restored from snapshot: ${TIMESTAMP}"
-echo "=================================================="
+DB_CONTAINER="${DB_CONTAINER:-mailhive-postgres}"
+MAIL_CONTAINER="${MAIL_CONTAINER:-mailhive-dovecot}"
+RSPAMD_CONTAINER="${RSPAMD_CONTAINER:-mailhive-rspamd}"
+for container in mailhive-api mailhive-postfix "$MAIL_CONTAINER" "$RSPAMD_CONTAINER"; do
+  [ "$(docker inspect -f '{{.State.Running}}' "$container")" = false ] || { echo "$container must be stopped before restore" >&2; exit 1; }
+done
+gunzip -c "mailhive_db_${TARGET}.sql.gz" | docker exec -i "$DB_CONTAINER" sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q'
+# Volume contents are replaced only after integrity checks and explicit operator intent.
+for spec in "$MAIL_CONTAINER:/var/vmail:mailhive_vmail" "$RSPAMD_CONTAINER:/var/lib/rspamd:mailhive_rspamd"; do
+  IFS=: read -r container directory prefix <<< "$spec"
+  docker run --rm -i --volumes-from "$container" -e RESTORE_DIRECTORY="$directory" alpine:3.22 sh -c 'find "$RESTORE_DIRECTORY" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; tar -xzf - -C "$RESTORE_DIRECTORY"' < "${prefix}_${TARGET}.tar.gz"
+done
+echo 'Restore complete. Reconcile provisioning jobs and rebuild mailbox indexes before restarting services. See deployment runbook.'

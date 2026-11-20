@@ -3,6 +3,9 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
+import { ApiExceptionFilter } from './common/api-exception.filter';
+import { ResponseInterceptor } from './common/response.interceptor';
+import { csrfProtection } from './common/security';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -14,6 +17,10 @@ async function bootstrap() {
 
   // Cookie Parser for JWT Refresh Token cookies
   app.use(cookieParser());
+  app.use(csrfProtection);
+  app.enableShutdownHooks();
+  app.useGlobalInterceptors(new ResponseInterceptor());
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   // Global Validation
   app.useGlobalPipes(
@@ -21,13 +28,13 @@ async function bootstrap() {
       whitelist: true,
       transform: true,
       forbidNonWhitelisted: true,
-      transformOptions: { enableImplicitConversion: true },
+      transformOptions: { enableImplicitConversion: false },
     }),
   );
 
   // CORS
   app.enableCors({
-    origin: process.env.APP_URL || 'http://localhost:3000',
+    origin: (process.env.APP_URL || 'http://localhost:3000').split(','),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],

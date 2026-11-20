@@ -119,30 +119,14 @@ export class MailController {
   @Post('send')
   @ApiOperation({ summary: 'Send email via Postfix authenticated submission' })
   @ApiConsumes('multipart/form-data', 'application/json')
-  @UseInterceptors(FilesInterceptor('attachments'))
+  @UseInterceptors(FilesInterceptor('attachments', 20, { limits: { fileSize: 18 * 1024 * 1024, files: 20, fields: 12, fieldSize: 2 * 1024 * 1024 } }))
   async sendMail(
     @CurrentUser() user: any,
-    @Body() body: any,
+    @Body() body: SendMailDto,
     @UploadedFiles() files?: Array<Express.Multer.File>,
   ) {
-    // When sent as multipart form-data, arrays might be strings
-    const sendMailDto: SendMailDto = {
-      to: Array.isArray(body.to) ? body.to : typeof body.to === 'string' ? JSON.parse(body.to) : [],
-      cc: Array.isArray(body.cc) ? body.cc : typeof body.cc === 'string' ? JSON.parse(body.cc) : undefined,
-      bcc: Array.isArray(body.bcc) ? body.bcc : typeof body.bcc === 'string' ? JSON.parse(body.bcc) : undefined,
-      subject: body.subject || '',
-      htmlBody: body.htmlBody,
-      textBody: body.textBody,
-      inReplyTo: body.inReplyTo,
-      references: Array.isArray(body.references)
-        ? body.references
-        : typeof body.references === 'string'
-          ? JSON.parse(body.references)
-          : undefined,
-      signatureId: body.signatureId,
-    };
 
-    return this.smtpService.sendMail(user.email, sendMailDto, files);
+    return this.smtpService.sendMail(user.email, body, files);
   }
 
   @Post('draft')
@@ -222,7 +206,7 @@ export class MailController {
   ) {
     const attachment = await this.imapService.getAttachment(user.email, folder, uid, partId);
     res.setHeader('Content-Type', attachment.contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.attachment(attachment.filename.replace(/[\r\n]/g, '_'));
     res.send(attachment.buffer);
   }
 
@@ -235,9 +219,14 @@ export class MailController {
 
       const cleanup = this.imapService.listenMailboxEvents(user.email, (event) => {
         subscriber.next({ data: event } as MessageEvent);
+        if (event.type === 'disconnected') subscriber.complete();
       });
 
+      const heartbeat = setInterval(() => subscriber.next({ data: { type: 'heartbeat' } } as MessageEvent), 25000);
+      const expiry = setTimeout(() => subscriber.complete(), 10 * 60000);
       return () => {
+        clearInterval(heartbeat);
+        clearTimeout(expiry);
         cleanup();
       };
     });

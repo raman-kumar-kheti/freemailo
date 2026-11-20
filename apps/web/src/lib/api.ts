@@ -77,18 +77,18 @@ export interface MessageDetail {
 
 class ApiClient {
   private token: string | null = null;
+  private refreshing: Promise<boolean> | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
-      this.token = localStorage.getItem("mailhive_token");
+      localStorage.removeItem("mailhive_token");
     }
   }
 
   setToken(token: string | null) {
     this.token = token;
     if (typeof window !== "undefined") {
-      if (token) localStorage.setItem("mailhive_token", token);
-      else localStorage.removeItem("mailhive_token");
+      localStorage.removeItem("mailhive_token");
     }
   }
 
@@ -102,6 +102,7 @@ class ApiClient {
     retry = true,
   ): Promise<T> {
     const headers: Record<string, string> = {
+      "X-Requested-With": "MailHive",
       ...(options.headers as Record<string, string>),
     };
 
@@ -123,26 +124,27 @@ class ApiClient {
       res.status === 401 &&
       retry &&
       path !== "/auth/login" &&
+      path !== "/auth/admin/login" &&
       path !== "/auth/refresh"
     ) {
-      // Try refresh token
-      try {
-        const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          this.setToken(data.accessToken);
-          return this.request<T>(path, options, false);
-        }
-      } catch (_) {}
+      // Concurrent 401 responses share one rotation request.
+      if (!this.refreshing) {
+        this.refreshing = fetch(`${API_BASE}/auth/refresh`, {
+          method: "POST", credentials: "include",
+          headers: { "X-Requested-With": "MailHive" },
+        }).then(async (response) => {
+          if (!response.ok) return false;
+          this.setToken((await response.json()).accessToken);
+          return true;
+        }).catch(() => false).finally(() => { this.refreshing = null; });
+      }
+      if (await this.refreshing) return this.request<T>(path, options, false);
       this.setToken(null);
       if (
         typeof window !== "undefined" &&
         !window.location.pathname.startsWith("/login")
       ) {
-        window.location.href = "/login";
+        window.location.href = window.location.pathname.startsWith("/admin") ? "/admin/login" : "/login";
       }
       throw new Error("Unauthorized");
     }
@@ -219,7 +221,8 @@ class ApiClient {
     const res = await fetch(
       `${API_BASE}/mail/messages/${uid}/raw?folder=${encodeURIComponent(folder)}`,
       {
-        headers: { Authorization: `Bearer ${this.token}` },
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+        credentials: "include",
       },
     );
     if (!res.ok) throw new Error("Could not load the original message.");
@@ -249,6 +252,7 @@ class ApiClient {
       if (payload.inReplyTo) formData.append("inReplyTo", payload.inReplyTo);
       if (payload.signatureId)
         formData.append("signatureId", payload.signatureId);
+      if (payload.references) formData.append("references", JSON.stringify(payload.references));
       payload.attachments.forEach((file) =>
         formData.append("attachments", file),
       );
@@ -261,7 +265,7 @@ class ApiClient {
 
     return this.request("/mail/send", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, attachments: undefined }),
     });
   }
 
@@ -334,6 +338,14 @@ class ApiClient {
   }
 
   // --- Settings ---
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request("/settings/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
+  }
+  async getVacation() { return this.request("/settings/vacation"); }
+  async saveVacation(payload: { isActive: boolean; subject: string; body: string; startDate?: string; endDate?: string }) {
+    return this.request("/settings/vacation", { method: "PUT", body: JSON.stringify(payload) });
+  }
+
   async getProfile() {
     return this.request("/settings/profile");
   }
@@ -464,10 +476,10 @@ class ApiClient {
   }
 
   async createAdminMailbox(payload: {
-    email: string;
-    password?: string;
+    localPart: string;
+    password: string;
     quotaBytes?: number;
-    domainId?: string;
+    domainId: string;
   }) {
     return this.request("/admin/mailboxes", {
       method: "POST",
@@ -495,15 +507,11 @@ class ApiClient {
     );
   }
 
-  async createAdminAlias(
-    source: string,
-    destination: string,
-    domainId: string,
-  ) {
-    return this.request("/admin/aliases", {
-      method: "POST",
-      body: JSON.stringify({ source, destination, domainId }),
-    });
+  async createAdminAlias(sourceAddress: string, destinationEmail: string, _domainId: string) {
+    const results = await this.request(`/admin/mailboxes?search=${encodeURIComponent(destinationEmail)}&pageSize=100`);
+    const mailbox = results.data.find((entry: { email: string }) => entry.email.toLowerCase() === destinationEmail.toLowerCase());
+    if (!mailbox) throw new Error("Destination must be an active hosted mailbox.");
+    return this.request("/admin/aliases", { method: "POST", body: JSON.stringify({ sourceAddress, destinationMailboxId: mailbox.id }) });
   }
 
   async deleteAdminAlias(id: string) {

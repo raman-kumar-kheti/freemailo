@@ -38,7 +38,7 @@ services:
         --requirepass ${REDIS_PASSWORD}
         --appendonly yes
         --maxmemory 256mb
-        --maxmemory-policy allkeys-lru
+        --maxmemory-policy noeviction
     volumes:
       - redisdata:/data
     healthcheck:
@@ -59,6 +59,11 @@ services:
     build:
       context: ./docker/postfix
     container_name: mailhive-postfix
+    healthcheck:
+      test: ["CMD-SHELL", "postfix status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     ports:
       - "25:25"
       - "465:465"
@@ -68,9 +73,10 @@ services:
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
       DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
-      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
+      - postfixqueue:/var/spool/postfix
       - vmail:/var/vmail
       - ./certs:/etc/ssl/mail:ro
     depends_on:
@@ -90,6 +96,11 @@ services:
     build:
       context: ./docker/dovecot
     container_name: mailhive-dovecot
+    healthcheck:
+      test: ["CMD", "doveadm", "service", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     ports:
       - "993:993"
       - "4190:4190"
@@ -98,7 +109,7 @@ services:
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
       DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
-      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
     volumes:
       - vmail:/var/vmail
       - ./certs:/etc/ssl/mail:ro
@@ -118,7 +129,7 @@ services:
       context: ./docker/rspamd
     container_name: mailhive-rspamd
     ports:
-      - "11334:11334"          # Web UI only; milter (11332) stays internal
+      - "127.0.0.1:11334:11334"          # Web UI only; milter (11332) stays internal
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       RSPAMD_PASSWORD: ${RSPAMD_PASSWORD}
@@ -139,8 +150,14 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: mailhive-api
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       NODE_ENV: production
       PORT: 4000
@@ -148,6 +165,10 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      MAIL_TLS_SERVERNAME: ${MAIL_HOSTNAME}
+      MAIL_TLS_REJECT_UNAUTHORIZED: ${MAIL_TLS_REJECT_UNAUTHORIZED:-true}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
       JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
@@ -156,15 +177,17 @@ services:
       POSTFIX_HOST: postfix
       DOVECOT_HOST: dovecot
       DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
-      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - vmail:/var/vmail
+      - rspamddata:/var/lib/rspamd
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rspamd:
+        condition: service_started
     restart: unless-stopped
     networks:
       - appnet
@@ -196,6 +219,8 @@ services:
 # Volumes
 # =============================================================================
 volumes:
+  postfixqueue:
+    driver: local
   pgdata:
     driver: local
   redisdata:

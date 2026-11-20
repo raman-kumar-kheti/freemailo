@@ -14,6 +14,7 @@ def run_phase2_verification():
     print("                PHASE 2 - BACKEND ACCEPTANCE TESTS                ")
     print("==================================================================")
     session = requests.Session()
+    session.headers.update({"X-Requested-With": "MailHive"})
 
     # -------------------------------------------------------------------------
     # TEST 1: Admin Login
@@ -29,7 +30,7 @@ def run_phase2_verification():
     admin_data = res.json()
     admin_token = admin_data.get("accessToken")
     refresh_cookie = session.cookies.get("refresh_token")
-    print(f"✅ Admin logged in. Token: {admin_token[:20]}... Role: {admin_data['user']['role']}")
+    print(f"✅ Admin logged in. Role: {admin_data['user']['role']}")
     print(f"✅ Refresh cookie set: {'YES' if refresh_cookie else 'NO'}")
 
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
@@ -59,7 +60,7 @@ def run_phase2_verification():
         return False
     refreshed_data = res.json()
     new_admin_token = refreshed_data.get("accessToken")
-    print(f"✅ Token rotated successfully. New Token: {new_admin_token[:20]}...")
+    print("✅ Token rotated successfully.")
     admin_headers = {"Authorization": f"Bearer {new_admin_token}"}
 
     # -------------------------------------------------------------------------

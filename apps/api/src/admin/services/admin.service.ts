@@ -37,7 +37,7 @@ export class AdminService {
     const domainName = dto.name.toLowerCase().trim();
 
     const existing = await this.prisma.domain.findFirst({
-      where: { name: domainName, deletedAt: null },
+      where: { name: domainName },
     });
     if (existing) {
       throw new ConflictException(`Domain ${domainName} already exists`);
@@ -190,7 +190,7 @@ export class AdminService {
     try {
       const records = await resolveMx(domain.name);
       const expectedHost = process.env.MAIL_HOSTNAME || 'mail.example.test';
-      mxVerified = records.some((r) => r.exchange.toLowerCase().includes(expectedHost.toLowerCase()));
+      mxVerified = records.some((r) => r.exchange.toLowerCase().replace(/\.$/, '') === expectedHost.toLowerCase().replace(/\.$/, ''));
     } catch (e) {
       mxVerified = false;
     }
@@ -198,8 +198,8 @@ export class AdminService {
     // Verify SPF
     try {
       const txtRecords = await resolveTxt(domain.name);
-      const joined = txtRecords.flat().join(' ');
-      spfVerified = joined.includes('v=spf1');
+      const records = txtRecords.map((parts) => parts.join('')).filter((record) => /^v=spf1\s/i.test(record));
+      spfVerified = records.length === 1 && /(?:^|\s)mx(?:\s|$)/i.test(records[0]) && /(?:^|\s)[~-]all(?:\s|$)/i.test(records[0]);
     } catch (e) {
       spfVerified = false;
     }
@@ -208,8 +208,8 @@ export class AdminService {
     try {
       const selector = domain.dkimSelector || 'mailhive';
       const dkimTxt = await resolveTxt(`${selector}._domainkey.${domain.name}`);
-      const joined = dkimTxt.flat().join('');
-      dkimVerified = joined.includes('v=DKIM1') && !!domain.dkimPublicKey && joined.includes(domain.dkimPublicKey);
+      const records = dkimTxt.map((parts) => parts.join(''));
+      dkimVerified = records.length === 1 && /(?:^|;)\s*v=DKIM1(?:;|$)/i.test(records[0]) && !!domain.dkimPublicKey && records[0].match(/(?:^|;)\s*p=([^;]*)/)?.[1].replace(/\s/g, '') === domain.dkimPublicKey;
     } catch (e) {
       dkimVerified = false;
     }
@@ -217,13 +217,13 @@ export class AdminService {
     // Verify DMARC
     try {
       const dmarcTxt = await resolveTxt(`_dmarc.${domain.name}`);
-      const joined = dmarcTxt.flat().join('');
-      dmarcVerified = joined.includes('v=DMARC1');
+      const records = dmarcTxt.map((parts) => parts.join('')).filter((record) => /^v=DMARC1;/i.test(record));
+      dmarcVerified = records.length === 1 && /(?:^|;)\s*p=(none|quarantine|reject)(?:;|$)/i.test(records[0]);
     } catch (e) {
       dmarcVerified = false;
     }
 
-    const isVerified = mxVerified && spfVerified && dkimVerified;
+    const isVerified = mxVerified && spfVerified && dkimVerified && dmarcVerified;
 
     const updated = await this.prisma.domain.update({
       where: { id },
@@ -245,7 +245,7 @@ export class AdminService {
 
   async createMailbox(dto: CreateMailboxDto, adminId: string) {
     const domain = await this.prisma.domain.findFirst({
-      where: { id: dto.domainId, deletedAt: null },
+      where: { id: dto.domainId, deletedAt: null, isActive: true },
     });
     if (!domain) {
       throw new NotFoundException('Domain not found');
@@ -255,7 +255,7 @@ export class AdminService {
     const email = `${localPart}@${domain.name}`;
 
     const existing = await this.prisma.mailbox.findFirst({
-      where: { email, deletedAt: null },
+      where: { email },
     });
     if (existing) {
       throw new ConflictException(`Mailbox ${email} already exists`);
@@ -396,22 +396,23 @@ export class AdminService {
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
     if (dto.quotaBytes !== undefined) {
       updateData.quotaBytes = BigInt(dto.quotaBytes);
-      await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_QUOTA, {
-        mailboxId: id,
-        quotaBytes: dto.quotaBytes,
-      });
+
     }
     if (dto.password) {
       updateData.passwordHash = await this.authService.hashPassword(dto.password);
-      await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_PASSWORD, {
-        mailboxId: id,
-      });
+
     }
 
     const updated = await this.prisma.mailbox.update({
       where: { id },
       data: updateData,
     });
+
+    if (dto.quotaBytes !== undefined) await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_QUOTA, { mailboxId: id, quotaBytes: dto.quotaBytes });
+    if (dto.password || dto.isActive === false) {
+      await this.prisma.refreshToken.updateMany({ where: { mailboxId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+    }
+    if (dto.password) await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_PASSWORD, { mailboxId: id });
 
     await this.logAudit(ActorType.ADMIN, adminId, 'mailbox.update', 'Mailbox', id, {
       changes: Object.keys(updateData),
@@ -459,6 +460,9 @@ export class AdminService {
     }
 
     const sourceAddress = dto.sourceAddress.toLowerCase().trim();
+    const sourceDomain = await this.prisma.domain.findFirst({ where: { name: sourceAddress.split('@')[1], isActive: true, deletedAt: null } });
+    if (!sourceDomain) throw new BadRequestException('Alias source domain must be hosted and active');
+    if (await this.prisma.mailbox.findUnique({ where: { email: sourceAddress } })) throw new ConflictException('Alias conflicts with a mailbox');
     const existing = await this.prisma.alias.findUnique({
       where: { sourceAddress },
     });
@@ -470,10 +474,10 @@ export class AdminService {
       data: {
         sourceAddress,
         destinationMailboxId: mailbox.id,
-        domainId: mailbox.domainId,
+        domainId: sourceDomain.id,
         isActive: true,
       },
-      include: { destinationMailbox: true },
+      include: { destinationMailbox: { select: { id: true, email: true } } },
     });
 
     await this.logAudit(ActorType.ADMIN, adminId, 'alias.create', 'Alias', alias.id, {

@@ -1,3 +1,4 @@
+import { accessTokenSeconds, refreshTokenSeconds } from './token-lifetime';
 import {
   Controller,
   Post,
@@ -22,6 +23,14 @@ import { CurrentUser, AuthenticatedUser } from '../common/decorators/current-use
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  private setCookies(res: Response, tokens: { accessToken: string; refreshToken: string; expiresIn: number }) {
+    const options = { httpOnly: true, secure: process.env.COOKIE_SECURE !== 'false' && process.env.NODE_ENV === 'production', sameSite: 'strict' as const };
+    res.clearCookie('refresh_token', { path: '/' });
+    res.cookie('refresh_token', tokens.refreshToken, { ...options, path: '/api/auth', maxAge: refreshTokenSeconds() * 1000 });
+    res.cookie('access_token', tokens.accessToken, { ...options, path: '/api', maxAge: tokens.expiresIn * 1000 });
+    res.setHeader('Cache-Control', 'no-store');
+  }
+
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -35,14 +44,7 @@ export class AuthController {
     const ua = req.headers['user-agent'];
     const result = await this.authService.loginMailbox(dto, ip, ua);
 
-    // Set refresh token in httpOnly secure cookie
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/api/auth',
-    });
+    this.setCookies(res, result);
 
     return {
       accessToken: result.accessToken,
@@ -64,15 +66,7 @@ export class AuthController {
     const ua = req.headers['user-agent'];
     const result = await this.authService.loginAdmin(dto, ip, ua);
 
-    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    this.setCookies(res, result);
 
     return {
       accessToken: result.accessToken,
@@ -89,27 +83,13 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const rawCookie = req.headers.cookie
-      ?.split(';')
-      .find((c) => c.trim().startsWith('refresh_token='))
-      ?.split('=')[1]
-      ?.trim();
-
-    const rawToken = req.cookies?.['refresh_token'] || rawCookie || req.body?.refreshToken;
+    const rawToken = req.cookies?.['refresh_token'] || req.body?.refreshToken;
     const ip = req.ip || req.socket.remoteAddress;
     const ua = req.headers['user-agent'];
 
     const result = await this.authService.refreshTokens(rawToken, ip, ua);
 
-    const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-
-    res.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: isSecure,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    this.setCookies(res, result);
 
     return {
       accessToken: result.accessToken,
@@ -117,6 +97,7 @@ export class AuthController {
     };
   }
 
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Logout and revoke refresh token' })
@@ -128,7 +109,9 @@ export class AuthController {
     if (rawToken) {
       await this.authService.logout(rawToken);
     }
-    res.clearCookie('refresh_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/api/auth' });
+    res.clearCookie('refresh_token', { path: '/' }); // Remove legacy cookie.
+    res.clearCookie('access_token', { path: '/api' });
   }
 
   @UseGuards(JwtAuthGuard)
