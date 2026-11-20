@@ -1,252 +1,78 @@
 'use client';
 
-import React, { useState } from 'react';
-import {
-  Search,
-  SlidersHorizontal,
-  Moon,
-  Sun,
-  HelpCircle,
-  LogOut,
-  Mail,
-  User as UserIcon,
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, SlidersHorizontal, Moon, Sun, HelpCircle, LogOut, Mail, Menu as MenuIcon, Settings, X } from 'lucide-react';
 import { User } from '@/lib/api';
+import { IconButton, Menu, MenuItem, Modal } from '@/components/ui/mail-ui';
 
 interface NavbarProps {
   user: User | null;
   onSearch: (query: string) => void;
   onOpenShortcuts: () => void;
+  onOpenSettings: () => void;
   onLogout: () => void;
+  onToggleSidebar: () => void;
+  sidebarExpanded: boolean;
+  query: string;
 }
 
-export function Navbar({ user, onSearch, onOpenShortcuts, onLogout }: NavbarProps) {
-  const [searchTerm, setSearchTerm] = useState('');
+export function Navbar({ user, onSearch, onOpenShortcuts, onOpenSettings, onLogout, onToggleSidebar, sidebarExpanded, query }: NavbarProps) {
+  const [searchTerm, setSearchTerm] = useState(query);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [advFrom, setAdvFrom] = useState('');
-  const [advTo, setAdvTo] = useState('');
-  const [advSubject, setAdvSubject] = useState('');
-  const [advUnreadOnly, setAdvUnreadOnly] = useState(false);
-  const [advStarredOnly, setAdvStarredOnly] = useState(false);
+  const [filters, setFilters] = useState({ from: '', to: '', subject: '', after: '', before: '', unread: false, starred: false, attachment: false });
   const [isDark, setIsDark] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-
+  useEffect(() => { setSearchTerm(query); }, [query]);
+  useEffect(() => {
+    const dark = localStorage.getItem('mailhive-theme') === 'dark' || (!localStorage.getItem('mailhive-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    setIsDark(dark);
+    document.documentElement.classList.toggle('dark', dark);
+  }, []);
   const toggleTheme = () => {
-    const nextDark = !isDark;
-    setIsDark(nextDark);
-    if (nextDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', !isDark);
+    localStorage.setItem('mailhive-theme', isDark ? 'light' : 'dark');
+    setIsDark(!isDark);
   };
-
-  const handleSimpleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchTerm.trim()) {
-      onSearch(searchTerm.trim());
-    }
-  };
-
-  const handleAdvancedSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parts: string[] = [];
-    if (advFrom) parts.push(`from:${advFrom}`);
-    if (advTo) parts.push(`to:${advTo}`);
-    if (advSubject) parts.push(`subject:${advSubject}`);
-    if (advUnreadOnly) parts.push('is:unread');
-    if (advStarredOnly) parts.push('is:starred');
-    const query = parts.join(' ');
-    setSearchTerm(query);
-    setShowAdvanced(false);
-    onSearch(query);
-  };
-
-  const initials = user?.displayName
-    ? user.displayName.substring(0, 2).toUpperCase()
-    : user?.email
-      ? user.email.substring(0, 2).toUpperCase()
-      : 'MH';
-
-  return (
-    <header className="h-16 border-b border-border bg-background px-4 flex items-center justify-between gap-4 sticky top-0 z-30 select-none">
-      {/* Brand Logo */}
-      <div className="flex items-center gap-3 min-w-[200px]">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-md">
-          <Mail className="w-5 h-5" />
-        </div>
-        <div className="flex flex-col">
-          <span className="font-bold text-lg leading-tight tracking-tight text-foreground flex items-center gap-1.5">
-            MailHive
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
-              Webmail
-            </span>
-          </span>
-          <span className="text-xs text-muted-foreground truncate max-w-[130px]">
-            {user?.domain || 'mail.local'}
-          </span>
-        </div>
+  const initials = (user?.displayName || user?.email || 'MH').split(/[\s@]+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return <>
+    <header className="relative z-30 flex shrink-0 flex-wrap items-center gap-2 px-3 py-3 sm:h-[76px] sm:flex-nowrap sm:gap-4 sm:px-5">
+      <div className="flex items-center gap-3 sm:w-[216px] sm:shrink-0">
+        <IconButton label="Toggle navigation" onClick={onToggleSidebar} aria-expanded={sidebarExpanded} aria-controls="mail-navigation"><MenuIcon size={21} /></IconButton>
+        <a href="/" aria-label="MailHive home" className="flex items-center gap-2.5 rounded-lg">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Mail size={21} strokeWidth={1.8} /></span>
+          <span className="text-[23px] font-semibold tracking-[-1px]">Mail<span className="font-normal text-muted-foreground">Hive</span></span>
+        </a>
       </div>
-
-      {/* Centered Search Bar */}
-      <div className="flex-1 max-w-2xl relative">
-        <form onSubmit={handleSimpleSearch} className="relative">
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            id="global-search-input"
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search mail (press / to focus, e.g. from:alice is:starred)"
-            className="w-full h-11 pl-10 pr-12 rounded-full bg-secondary/80 border border-transparent focus:border-border focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm transition-all shadow-inner"
-          />
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted"
-            title="Advanced Search Filters"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-        </form>
-
-        {/* Advanced Search Dropdown */}
-        {showAdvanced && (
-          <div className="absolute top-14 left-0 w-full bg-popover border border-border rounded-xl shadow-2xl p-5 z-50 text-sm animate-in fade-in zoom-in-95">
-            <h3 className="font-semibold text-foreground mb-3 text-xs tracking-wider uppercase text-muted-foreground">
-              Search Operators
-            </h3>
-            <form onSubmit={handleAdvancedSearch} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">From</label>
-                  <input
-                    type="text"
-                    value={advFrom}
-                    onChange={(e) => setAdvFrom(e.target.value)}
-                    placeholder="e.g. alice@example.test"
-                    className="w-full px-3 py-1.5 rounded-lg border border-input bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">To</label>
-                  <input
-                    type="text"
-                    value={advTo}
-                    onChange={(e) => setAdvTo(e.target.value)}
-                    placeholder="e.g. bob@example.test"
-                    className="w-full px-3 py-1.5 rounded-lg border border-input bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Subject</label>
-                <input
-                  type="text"
-                  value={advSubject}
-                  onChange={(e) => setAdvSubject(e.target.value)}
-                  placeholder="Subject keywords"
-                  className="w-full px-3 py-1.5 rounded-lg border border-input bg-background focus:ring-1 focus:ring-primary focus:outline-none"
-                />
-              </div>
-              <div className="flex items-center gap-6 pt-1">
-                <label className="flex items-center gap-2 cursor-pointer text-xs">
-                  <input
-                    type="checkbox"
-                    checked={advUnreadOnly}
-                    onChange={(e) => setAdvUnreadOnly(e.target.checked)}
-                    className="rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span>Unread only</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs">
-                  <input
-                    type="checkbox"
-                    checked={advStarredOnly}
-                    onChange={(e) => setAdvStarredOnly(e.target.checked)}
-                    className="rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span>Starred only</span>
-                </label>
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-muted text-muted-foreground"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  Search
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-      </div>
-
-      {/* Right Controls */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={toggleTheme}
-          aria-label="Toggle Dark Mode"
-          className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          title="Toggle Dark Mode"
-        >
-          {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5" />}
-        </button>
-
-        <button
-          onClick={onOpenShortcuts}
-          aria-label="Keyboard Shortcuts"
-          className="p-2 rounded-full hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
-          title="Keyboard Shortcuts (?)"
-        >
-          <HelpCircle className="w-5 h-5" />
-        </button>
-
-        {/* User Account Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowUserMenu(!showUserMenu)}
-            className="flex items-center gap-2 p-1 rounded-full hover:ring-2 hover:ring-primary/20 transition-all focus:outline-none"
-            title={user?.email || 'Account'}
-          >
-            <div className="w-9 h-9 rounded-full bg-blue-600 text-white font-medium text-xs flex items-center justify-center shadow-sm">
-              {initials}
-            </div>
-          </button>
-
-          {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-popover border border-border rounded-xl shadow-xl p-3 z-50 text-sm animate-in fade-in">
-              <div className="flex items-center gap-3 p-2 border-b border-border pb-3">
-                <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
-                  {initials}
-                </div>
-                <div className="overflow-hidden">
-                  <p className="font-semibold text-foreground truncate">
-                    {user?.displayName || 'Mailbox User'}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-                </div>
-              </div>
-              <div className="pt-2">
-                <button
-                  onClick={onLogout}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+      <form role="search" onSubmit={(e) => { e.preventDefault(); onSearch(searchTerm.trim()); }} className="order-3 flex h-12 w-full items-center gap-1 rounded-2xl bg-secondary px-2 transition-colors focus-within:bg-card focus-within:shadow-sm focus-within:ring-1 focus-within:ring-border sm:order-none sm:max-w-[760px] sm:flex-1">
+        <IconButton label="Search mail" type="submit"><Search size={20} /></IconButton>
+        <input id="global-search-input" aria-label="Search mail" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search mail" className="h-full min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground" />
+        {searchTerm ? <IconButton label="Clear search" onClick={() => { setSearchTerm(''); onSearch(''); }}><X size={18} /></IconButton> : <kbd className="mr-2 hidden rounded border border-input px-1.5 text-xs text-muted-foreground lg:block">/</kbd>}
+        <IconButton label="Advanced search" onClick={() => setShowAdvanced(true)}><SlidersHorizontal size={20} /></IconButton>
+      </form>
+      <div className="ml-auto flex items-center gap-0.5 sm:gap-1">
+        <IconButton label="Keyboard Shortcuts" onClick={onOpenShortcuts} className="hidden lg:flex"><HelpCircle size={20} /></IconButton>
+        <IconButton label="Settings" onClick={onOpenSettings}><Settings size={20} /></IconButton>
+        <IconButton label={isDark ? 'Switch to light theme' : 'Switch to dark theme'} onClick={toggleTheme} className="hidden sm:flex">{isDark ? <Sun size={20} /> : <Moon size={20} />}</IconButton>
+        <Menu align="end" trigger={<button aria-label="Account menu" className="ml-2 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-card bg-accent text-sm font-semibold text-accent-foreground ring-1 ring-border">{initials}</button>}>
+          <div className="max-w-64 border-b px-3 py-3"><p className="truncate font-semibold">{user?.displayName || 'Your mailbox'}</p><p className="mt-1 truncate text-xs text-muted-foreground">{user?.email}</p></div>
+          <MenuItem onSelect={toggleTheme}>{isDark ? <Sun size={16} /> : <Moon size={16} />} {isDark ? 'Light theme' : 'Dark theme'}</MenuItem>
+          <MenuItem onSelect={onOpenShortcuts}><HelpCircle size={16} />Keyboard shortcuts</MenuItem>
+          <MenuItem onSelect={onLogout}><LogOut size={16} />Sign out</MenuItem>
+        </Menu>
       </div>
     </header>
-  );
+    <Modal open={showAdvanced} onClose={() => setShowAdvanced(false)} title="Advanced search" className="max-w-xl">
+      <form className="space-y-4 overflow-y-auto p-6" onSubmit={(e) => {
+        e.preventDefault();
+        const parts = (['from', 'to', 'subject', 'after', 'before'] as const).filter((key) => filters[key].trim()).map((key) => `${key}:${filters[key].includes(' ') ? `"${filters[key].replace(/"/g, '')}"` : filters[key]}`);
+        if (filters.unread) parts.push('is:unread');
+        if (filters.starred) parts.push('is:starred');
+        if (filters.attachment) parts.push('has:attachment');
+        onSearch(parts.join(' ')); setShowAdvanced(false);
+      }}>
+        {(['from', 'to', 'subject', 'after', 'before'] as const).map((key) => <label key={key} className="grid grid-cols-[64px_1fr] items-center gap-4 text-sm"><span className="capitalize text-muted-foreground">{key}</span><input className="field" type={key === 'after' || key === 'before' ? 'date' : 'text'} value={filters[key]} onChange={(e) => setFilters({ ...filters, [key]: e.target.value })} /></label>)}
+        <div className="flex flex-wrap gap-x-5 gap-y-3 border-t py-4">{(['attachment', 'unread', 'starred'] as const).map((key) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={filters[key]} onChange={(e) => setFilters({ ...filters, [key]: e.target.checked })} />{key === 'attachment' ? 'Has attachment' : `${key[0].toUpperCase()}${key.slice(1)} only`}</label>)}</div>
+        <div className="flex justify-end"><button type="submit" className="primary-button"><Search size={16} />Search</button></div>
+      </form>
+    </Modal>
+  </>;
 }
