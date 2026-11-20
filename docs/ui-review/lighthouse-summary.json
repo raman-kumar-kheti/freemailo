@@ -1,0 +1,7 @@
+{
+  "audit": "Populated mailbox UI using test-only Playwright API fixtures; production Next.js build",
+  "date": "2026-11-20T10:27:55.841Z",
+  "lighthouseVersion": "13.6.0",
+  "accessibilityScore": 100,
+  "failedAudits": []
+}
