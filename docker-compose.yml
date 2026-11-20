@@ -172,6 +172,27 @@ services:
       - frontend
 
   # ---------------------------------------------------------------------------
+  # Web – Next.js Gmail-style Webmail UI
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: mailhive-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      API_URL: http://api:4000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - frontend
+      - appnet
+
+  # ---------------------------------------------------------------------------
   # Roundcube – webmail client
   # ---------------------------------------------------------------------------
   roundcube:

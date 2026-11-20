@@ -10,3 +10,5 @@ coverage/
 .turbo/
 /data/
 /certs/
+test-results/
+playwright-report/
