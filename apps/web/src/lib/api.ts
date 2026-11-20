@@ -344,6 +344,87 @@ class ApiClient {
       body: JSON.stringify({ email }),
     });
   }
+
+  // --- Admin APIs ---
+  async adminLogin(email: string, password: string) {
+    const data = await this.request('/auth/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    this.setToken(data.accessToken);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mailhive_admin_user', JSON.stringify(data.user));
+    }
+    return data;
+  }
+
+  async listAdminDomains(page = 1, pageSize = 50, search?: string) {
+    return this.request(`/admin/domains?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
+  }
+
+  async createAdminDomain(name: string) {
+    return this.request('/admin/domains', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  async deleteAdminDomain(id: string) {
+    return this.request(`/admin/domains/${id}`, { method: 'DELETE' });
+  }
+
+  async getDomainDns(id: string) {
+    return this.request(`/admin/domains/${id}/dns`);
+  }
+
+  async verifyDomainDns(id: string) {
+    return this.request(`/admin/domains/${id}/verify`, { method: 'POST' });
+  }
+
+  async listAdminMailboxes(domainId?: string, page = 1, pageSize = 50) {
+    return this.request(`/admin/mailboxes?page=${page}&pageSize=${pageSize}${domainId ? `&domainId=${domainId}` : ''}`);
+  }
+
+  async createAdminMailbox(payload: { email: string; password?: string; quotaBytes?: number; domainId?: string }) {
+    return this.request('/admin/mailboxes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async updateAdminMailbox(id: string, payload: { password?: string; quotaBytes?: number; isActive?: boolean }) {
+    return this.request(`/admin/mailboxes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteAdminMailbox(id: string) {
+    return this.request(`/admin/mailboxes/${id}`, { method: 'DELETE' });
+  }
+
+  async listAdminAliases(domainId?: string) {
+    return this.request(`/admin/aliases${domainId ? `?domainId=${domainId}` : ''}`);
+  }
+
+  async createAdminAlias(source: string, destination: string, domainId: string) {
+    return this.request('/admin/aliases', {
+      method: 'POST',
+      body: JSON.stringify({ source, destination, domainId }),
+    });
+  }
+
+  async deleteAdminAlias(id: string) {
+    return this.request(`/admin/aliases/${id}`, { method: 'DELETE' });
+  }
+
+  async listAdminJobs(page = 1, pageSize = 50, status?: string) {
+    return this.request(`/admin/jobs?page=${page}&pageSize=${pageSize}${status ? `&status=${status}` : ''}`);
+  }
+
+  async listAdminAuditLogs(page = 1, pageSize = 50, action?: string) {
+    return this.request(`/admin/audit-log?page=${page}&pageSize=${pageSize}${action ? `&action=${action}` : ''}`);
+  }
 }
 
 export const api = new ApiClient();
