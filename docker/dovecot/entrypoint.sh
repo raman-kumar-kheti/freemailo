@@ -13,6 +13,13 @@ sed -i "s|MAIL_DOMAIN_PLACEHOLDER|${MAIL_DOMAIN}|g" /etc/dovecot/conf.d/20-lmtp.
 chmod 600 /etc/dovecot/dovecot-sql.conf.ext
 chown root:root /etc/dovecot/dovecot-sql.conf.ext
 
+# Configure master user for webmail API access
+DOVECOT_MASTER_PASSWORD="${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}"
+MASTER_USER_HASH=$(doveadm pw -s SHA512-CRYPT -p "${DOVECOT_MASTER_PASSWORD}")
+echo "mailhive_master:${MASTER_USER_HASH}" > /etc/dovecot/master-users
+chown root:dovecot /etc/dovecot/master-users
+chmod 640 /etc/dovecot/master-users
+
 # Ensure vmail directory exists with correct ownership
 mkdir -p /var/vmail
 chown -R 5000:5000 /var/vmail

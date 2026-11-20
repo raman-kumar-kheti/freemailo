@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { RedisService } from './redis.service';
 
 @Global()
 @Module({
@@ -18,6 +19,8 @@ import { BullModule } from '@nestjs/bullmq';
       }),
     }),
   ],
-  exports: [BullModule],
+  providers: [RedisService],
+  exports: [BullModule, RedisService],
 })
 export class RedisModule {}
+export { RedisService } from './redis.service';

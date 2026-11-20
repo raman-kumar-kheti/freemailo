@@ -67,6 +67,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - vmail:/var/vmail
@@ -95,6 +97,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
     volumes:
       - vmail:/var/vmail
       - ./certs:/etc/ssl/mail:ro
@@ -151,6 +155,8 @@ services:
       MAIL_DOMAIN: ${MAIL_DOMAIN}
       POSTFIX_HOST: postfix
       DOVECOT_HOST: dovecot
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:-mailhive_master_secret_2026}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - vmail:/var/vmail
