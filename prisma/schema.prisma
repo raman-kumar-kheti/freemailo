@@ -1,0 +1,310 @@
+// MailHive - Prisma Schema
+// This is the source of truth for all application data.
+// Postfix and Dovecot read from this database via SQL lookup maps.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum ActorType {
+  ADMIN
+  SYSTEM
+  MAILBOX
+}
+
+enum ProvisionJobType {
+  CREATE_DOMAIN
+  CREATE_MAILBOX
+  DELETE_MAILBOX
+  UPDATE_QUOTA
+  UPDATE_PASSWORD
+  CREATE_ALIAS
+  DELETE_ALIAS
+  GENERATE_DKIM
+  RELOAD_SERVICE
+}
+
+enum ProvisionJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+// =============================================================================
+// DOMAIN & MAILBOX (core mail entities)
+// =============================================================================
+
+/// A hosted email domain (e.g., example.com).
+/// Postfix reads this via pgsql:virtual-domains.cf
+model Domain {
+  id        String   @id @default(cuid())
+  name      String   @unique /// Fully qualified domain name
+  isActive  Boolean  @default(true)
+
+  // DNS verification status
+  isVerified   Boolean @default(false)
+  mxVerified   Boolean @default(false)
+  spfVerified  Boolean @default(false)
+  dkimVerified Boolean @default(false)
+  dmarcVerified Boolean @default(false)
+
+  // DKIM key material
+  dkimSelector   String? /// e.g., "mailhive" or "20261120"
+  dkimPrivateKey String? /// PEM-encoded RSA private key (encrypted at rest)
+  dkimPublicKey  String? /// For DNS TXT record display
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? /// Soft delete
+
+  mailboxes Mailbox[]
+  aliases   Alias[]
+
+  @@index([isActive, deletedAt])
+  @@map("domains")
+}
+
+/// A virtual mailbox (user@domain). No system user required.
+/// Dovecot reads this via SQL passdb/userdb.
+/// Postfix reads this via pgsql:virtual-mailboxes.cf
+model Mailbox {
+  id          String   @id @default(cuid())
+  localPart   String   /// Part before @
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  email       String   @unique /// Full address: localPart@domain.name
+  passwordHash String  /// Argon2id hash, compatible with Dovecot {ARGON2ID}
+  displayName String?
+  quotaBytes  BigInt   @default(1073741824) /// 1 GB default
+  usedBytes   BigInt   @default(0)
+  isActive    Boolean  @default(true)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime? /// Soft delete
+
+  // Relations
+  refreshTokens  RefreshToken[]
+  contacts       Contact[]
+  labels         Label[]
+  signatures     Signature[]
+  trustedSenders TrustedSender[]
+  vacationResponder VacationResponder?
+  aliases        Alias[]        @relation("destination")
+
+  @@unique([localPart, domainId])
+  @@index([email, isActive])
+  @@index([domainId])
+  @@map("mailboxes")
+}
+
+/// Email alias/forwarding rule. Maps source address to a destination mailbox.
+model Alias {
+  id                   String  @id @default(cuid())
+  sourceAddress        String  /// Full alias address (alias@domain.com)
+  destinationMailboxId String
+  destinationMailbox   Mailbox @relation("destination", fields: [destinationMailboxId], references: [id], onDelete: Cascade)
+  domainId             String
+  domain               Domain  @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  isActive             Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceAddress])
+  @@index([domainId])
+  @@index([destinationMailboxId])
+  @@map("aliases")
+}
+
+// =============================================================================
+// AUTHENTICATION
+// =============================================================================
+
+/// Admin users with dashboard access. Separate from mailbox users.
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String    /// Argon2id hash
+  displayName  String?
+  role         AdminRole @default(ADMIN)
+
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@map("admin_users")
+}
+
+/// Rotating refresh tokens for both mailbox users and admins.
+/// Each refresh rotates: old token is revoked, new one issued.
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique /// Opaque token value (hashed)
+  expiresAt DateTime
+  revokedAt DateTime? /// Null = active, set = revoked
+
+  // Polymorphic owner: exactly one of these is set
+  mailboxId   String?
+  mailbox     Mailbox?   @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  deviceInfo String? /// User-Agent or device identifier
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([token])
+  @@index([mailboxId])
+  @@index([adminUserId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// =============================================================================
+// USER SETTINGS
+// =============================================================================
+
+/// Contact autocomplete entries, built from sent mail.
+model Contact {
+  id              String   @id @default(cuid())
+  mailboxId       String
+  mailbox         Mailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  email           String
+  displayName     String?
+  lastContactedAt DateTime @default(now())
+  contactCount    Int      @default(1) /// Frequency for ranking
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mailboxId, email])
+  @@index([mailboxId, lastContactedAt(sort: Desc)])
+  @@map("contacts")
+}
+
+/// User-defined labels (and system labels like Inbox, Sent, etc.)
+model Label {
+  id        String  @id @default(cuid())
+  mailboxId String
+  mailbox   Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  name      String
+  color     String? /// Hex color code
+  isSystem  Boolean @default(false) /// System labels can't be deleted
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([mailboxId, name])
+  @@index([mailboxId])
+  @@map("labels")
+}
+
+/// Email signatures with HTML body.
+model Signature {
+  id        String  @id @default(cuid())
+  mailboxId String
+  mailbox   Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  name      String
+  body      String  /// HTML signature content
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mailboxId])
+  @@map("signatures")
+}
+
+/// Senders whose remote images are auto-loaded.
+model TrustedSender {
+  id        String  @id @default(cuid())
+  mailboxId String
+  mailbox   Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  email     String  /// Trusted sender email address
+
+  createdAt DateTime @default(now())
+
+  @@unique([mailboxId, email])
+  @@map("trusted_senders")
+}
+
+/// Vacation auto-reply settings. Implemented as a Sieve script via ManageSieve.
+model VacationResponder {
+  id        String   @id @default(cuid())
+  mailboxId String   @unique
+  mailbox   Mailbox  @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  isActive  Boolean  @default(false)
+  subject   String
+  body      String   /// Plain text or HTML auto-reply body
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("vacation_responders")
+}
+
+// =============================================================================
+// OPERATIONS
+// =============================================================================
+
+/// Audit log for admin and system actions.
+model AuditLog {
+  id           String    @id @default(cuid())
+  actorType    ActorType
+  actorId      String    /// ID of the admin, mailbox, or "system"
+  action       String    /// e.g., "domain.create", "mailbox.delete"
+  resourceType String    /// e.g., "Domain", "Mailbox"
+  resourceId   String?   /// ID of the affected resource
+  details      Json?     /// Additional context
+  ipAddress    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorType, actorId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
+
+/// Provisioning job tracking. BullMQ jobs are tracked here for status visibility.
+model ProvisionJob {
+  id          String              @id @default(cuid())
+  type        ProvisionJobType
+  status      ProvisionJobStatus  @default(PENDING)
+  payload     Json                /// Job-specific data (domain name, mailbox email, etc.)
+  result      Json?               /// Completion result or error details
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5)
+  lastError   String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([status])
+  @@index([type, status])
+  @@index([createdAt(sort: Desc)])
+  @@map("provision_jobs")
+}

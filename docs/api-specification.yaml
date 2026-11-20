@@ -1,0 +1,1361 @@
+openapi: 3.1.0
+info:
+  title: MailHive API
+  version: 1.0.0
+  description: |
+    Self-hosted multi-domain email platform API.
+    All endpoints require authentication unless noted.
+  contact:
+    name: MailHive Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:4000
+    description: Development
+  - url: https://api.mail.example.com
+    description: Production
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # --- Pagination ---
+    PaginationMeta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        pageSize: { type: integer, example: 50 }
+        total: { type: integer, example: 243 }
+        totalPages: { type: integer, example: 5 }
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data: { type: array, items: {} }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    # --- Error ---
+    ErrorResponse:
+      type: object
+      required: [statusCode, message]
+      properties:
+        statusCode: { type: integer }
+        message: { type: string }
+        error: { type: string }
+        details: { type: array, items: { type: object } }
+
+    # --- Auth ---
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "user@example.com" }
+        password: { type: string, minLength: 8, example: "securepass123" }
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        expiresIn: { type: integer, example: 900 }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            email: { type: string }
+            displayName: { type: string }
+            role: { type: string, enum: [mailbox, admin, super_admin] }
+
+    # --- Domain ---
+    Domain:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, example: "example.com" }
+        isActive: { type: boolean }
+        isVerified: { type: boolean }
+        mxVerified: { type: boolean }
+        spfVerified: { type: boolean }
+        dkimVerified: { type: boolean }
+        dmarcVerified: { type: boolean }
+        dkimSelector: { type: string }
+        dkimPublicKey: { type: string }
+        mailboxCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    CreateDomainRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, example: "example.com" }
+
+    DnsRecords:
+      type: object
+      properties:
+        mx:
+          type: object
+          properties:
+            type: { type: string, example: "MX" }
+            host: { type: string, example: "example.com" }
+            value: { type: string, example: "mail.example.com" }
+            priority: { type: integer, example: 10 }
+            verified: { type: boolean }
+        spf:
+          type: object
+          properties:
+            type: { type: string, example: "TXT" }
+            host: { type: string, example: "example.com" }
+            value: { type: string, example: "v=spf1 mx ~all" }
+            verified: { type: boolean }
+        dkim:
+          type: object
+          properties:
+            type: { type: string, example: "TXT" }
+            host: { type: string, example: "mailhive._domainkey.example.com" }
+            value: { type: string }
+            verified: { type: boolean }
+        dmarc:
+          type: object
+          properties:
+            type: { type: string, example: "TXT" }
+            host: { type: string, example: "_dmarc.example.com" }
+            value: { type: string, example: "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com" }
+            verified: { type: boolean }
+        ptr:
+          type: object
+          properties:
+            description: { type: string }
+            value: { type: string }
+        mtaSts:
+          type: object
+          properties:
+            description: { type: string }
+            value: { type: string }
+
+    # --- Mailbox ---
+    Mailbox:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        localPart: { type: string }
+        domainId: { type: string }
+        domainName: { type: string }
+        displayName: { type: string }
+        quotaBytes: { type: integer }
+        usedBytes: { type: integer }
+        quotaPercent: { type: number }
+        isActive: { type: boolean }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    CreateMailboxRequest:
+      type: object
+      required: [localPart, domainId, password]
+      properties:
+        localPart: { type: string, example: "john" }
+        domainId: { type: string }
+        password: { type: string, minLength: 8 }
+        displayName: { type: string, example: "John Doe" }
+        quotaBytes: { type: integer, example: 1073741824 }
+
+    # --- Alias ---
+    Alias:
+      type: object
+      properties:
+        id: { type: string }
+        sourceAddress: { type: string, example: "info@example.com" }
+        destinationMailboxId: { type: string }
+        destinationEmail: { type: string }
+        domainId: { type: string }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+
+    CreateAliasRequest:
+      type: object
+      required: [sourceAddress, destinationMailboxId, domainId]
+      properties:
+        sourceAddress: { type: string }
+        destinationMailboxId: { type: string }
+        domainId: { type: string }
+
+    # --- Mail ---
+    Folder:
+      type: object
+      properties:
+        name: { type: string, example: "INBOX" }
+        path: { type: string, example: "INBOX" }
+        delimiter: { type: string, example: "/" }
+        specialUse: { type: string, example: "\\Inbox", nullable: true }
+        total: { type: integer }
+        unread: { type: integer }
+        children: { type: array, items: { $ref: '#/components/schemas/Folder' } }
+
+    MessageListItem:
+      type: object
+      properties:
+        uid: { type: integer }
+        messageId: { type: string }
+        threadId: { type: string }
+        from:
+          type: object
+          properties:
+            name: { type: string }
+            address: { type: string }
+        to: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        subject: { type: string }
+        snippet: { type: string, maxLength: 200 }
+        date: { type: string, format: date-time }
+        flags: { type: array, items: { type: string } }
+        isRead: { type: boolean }
+        isStarred: { type: boolean }
+        hasAttachments: { type: boolean }
+        labels: { type: array, items: { type: string } }
+
+    Message:
+      type: object
+      properties:
+        uid: { type: integer }
+        messageId: { type: string }
+        threadId: { type: string }
+        from:
+          type: object
+          properties:
+            name: { type: string }
+            address: { type: string }
+        to: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        cc: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        bcc: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        replyTo: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        subject: { type: string }
+        date: { type: string, format: date-time }
+        flags: { type: array, items: { type: string } }
+        isRead: { type: boolean }
+        isStarred: { type: boolean }
+        htmlBody: { type: string, description: "Sanitized HTML body" }
+        textBody: { type: string }
+        attachments:
+          type: array
+          items:
+            type: object
+            properties:
+              partId: { type: string }
+              filename: { type: string }
+              contentType: { type: string }
+              size: { type: integer }
+              contentId: { type: string, nullable: true }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        authResults:
+          type: object
+          properties:
+            spf: { type: string, enum: [pass, fail, softfail, neutral, none] }
+            dkim: { type: string, enum: [pass, fail, none] }
+            dmarc: { type: string, enum: [pass, fail, none] }
+
+    Thread:
+      type: object
+      properties:
+        threadId: { type: string }
+        subject: { type: string }
+        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
+        participants: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
+        messageCount: { type: integer }
+
+    SendMailRequest:
+      type: object
+      required: [to, subject]
+      properties:
+        to: { type: array, items: { type: string, format: email } }
+        cc: { type: array, items: { type: string, format: email } }
+        bcc: { type: array, items: { type: string, format: email } }
+        subject: { type: string }
+        htmlBody: { type: string }
+        textBody: { type: string }
+        inReplyTo: { type: string, description: "Message-ID for replies" }
+        references: { type: array, items: { type: string } }
+        signatureId: { type: string, nullable: true }
+      description: "Attachments sent as multipart/form-data"
+
+    SaveDraftRequest:
+      type: object
+      properties:
+        to: { type: array, items: { type: string } }
+        cc: { type: array, items: { type: string } }
+        bcc: { type: array, items: { type: string } }
+        subject: { type: string }
+        htmlBody: { type: string }
+        textBody: { type: string }
+
+    UpdateFlagsRequest:
+      type: object
+      required: [folder, uids, flags, action]
+      properties:
+        folder: { type: string }
+        uids: { type: array, items: { type: integer } }
+        flags: { type: array, items: { type: string, enum: ["\\Seen", "\\Flagged", "\\Deleted", "\\Draft"] } }
+        action: { type: string, enum: [add, remove, set] }
+
+    MoveMessagesRequest:
+      type: object
+      required: [sourceFolder, destinationFolder, uids]
+      properties:
+        sourceFolder: { type: string }
+        destinationFolder: { type: string }
+        uids: { type: array, items: { type: integer } }
+
+    DeleteMessagesRequest:
+      type: object
+      required: [folder, uids]
+      properties:
+        folder: { type: string }
+        uids: { type: array, items: { type: integer } }
+        permanent: { type: boolean, default: false }
+
+    # --- Settings ---
+    Profile:
+      type: object
+      properties:
+        email: { type: string }
+        displayName: { type: string }
+
+    SignatureObj:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        body: { type: string }
+        isDefault: { type: boolean }
+
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string, minLength: 8 }
+
+    VacationResponder:
+      type: object
+      properties:
+        isActive: { type: boolean }
+        subject: { type: string }
+        body: { type: string }
+        startDate: { type: string, format: date, nullable: true }
+        endDate: { type: string, format: date, nullable: true }
+
+    Label:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string, nullable: true }
+        isSystem: { type: boolean }
+
+    Contact:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        displayName: { type: string, nullable: true }
+        contactCount: { type: integer }
+
+    # --- Admin ---
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string }
+        actorType: { type: string }
+        actorId: { type: string }
+        action: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        details: { type: object }
+        ipAddress: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ProvisionJob:
+      type: object
+      properties:
+        id: { type: string }
+        type: { type: string }
+        status: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED, DEAD_LETTER] }
+        payload: { type: object }
+        result: { type: object, nullable: true }
+        attempts: { type: integer }
+        maxAttempts: { type: integer }
+        lastError: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+
+    # --- Realtime ---
+    MailEvent:
+      type: object
+      properties:
+        type: { type: string, enum: [new_mail, flags_updated, expunge] }
+        folder: { type: string }
+        uid: { type: integer }
+        message: { $ref: '#/components/schemas/MessageListItem' }
+
+  parameters:
+    PageParam:
+      in: query
+      name: page
+      schema: { type: integer, default: 1, minimum: 1 }
+    PageSizeParam:
+      in: query
+      name: pageSize
+      schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
+    FolderParam:
+      in: query
+      name: folder
+      required: true
+      schema: { type: string, default: "INBOX" }
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            statusCode: 429
+            message: "Rate limit exceeded. Try again in 60 seconds."
+      headers:
+        Retry-After:
+          schema: { type: integer }
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ===========================================================================
+  # AUTH
+  # ===========================================================================
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Mailbox user login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+          headers:
+            Set-Cookie:
+              description: httpOnly refresh token cookie
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/auth/admin/login:
+    post:
+      tags: [Auth]
+      summary: Admin user login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token using refresh token cookie
+      security: []
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke refresh token and clear cookie
+      responses:
+        '204': { description: Logged out }
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated user
+      responses:
+        '200':
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  email: { type: string }
+                  displayName: { type: string }
+                  role: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # ===========================================================================
+  # ADMIN - DOMAINS
+  # ===========================================================================
+  /api/admin/domains:
+    get:
+      tags: [Admin - Domains]
+      summary: List all domains
+      parameters:
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: Domain list
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Domain' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin - Domains]
+      summary: Add a new domain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateDomainRequest' }
+      responses:
+        '201':
+          description: Domain created, DKIM generation enqueued
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Domain' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409':
+          description: Domain already exists
+
+  /api/admin/domains/{id}:
+    get:
+      tags: [Admin - Domains]
+      summary: Get domain details
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Domain' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Admin - Domains]
+      summary: Update domain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                isActive: { type: boolean }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Domain' }
+    delete:
+      tags: [Admin - Domains]
+      summary: Soft-delete domain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Domain deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/domains/{id}/dns:
+    get:
+      tags: [Admin - Domains]
+      summary: Get required DNS records for domain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DnsRecords' }
+
+  /api/admin/domains/{id}/verify:
+    post:
+      tags: [Admin - Domains]
+      summary: Trigger DNS verification for domain
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Domain' }
+
+  # ===========================================================================
+  # ADMIN - MAILBOXES
+  # ===========================================================================
+  /api/admin/mailboxes:
+    get:
+      tags: [Admin - Mailboxes]
+      summary: List mailboxes
+      parameters:
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: domainId
+          schema: { type: string }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Mailbox' } }
+    post:
+      tags: [Admin - Mailboxes]
+      summary: Create a new mailbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMailboxRequest' }
+      responses:
+        '202':
+          description: Mailbox creation enqueued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mailbox: { $ref: '#/components/schemas/Mailbox' }
+                  jobId: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: Email already exists }
+
+  /api/admin/mailboxes/{id}:
+    get:
+      tags: [Admin - Mailboxes]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mailbox' }
+    patch:
+      tags: [Admin - Mailboxes]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+                quotaBytes: { type: integer }
+                isActive: { type: boolean }
+                password: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mailbox' }
+    delete:
+      tags: [Admin - Mailboxes]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Mailbox deletion enqueued }
+
+  # ===========================================================================
+  # ADMIN - ALIASES
+  # ===========================================================================
+  /api/admin/aliases:
+    get:
+      tags: [Admin - Aliases]
+      parameters:
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: domainId
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Alias' } }
+    post:
+      tags: [Admin - Aliases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAliasRequest' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alias' }
+
+  /api/admin/aliases/{id}:
+    delete:
+      tags: [Admin - Aliases]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Alias deleted }
+
+  # ===========================================================================
+  # ADMIN - JOBS & AUDIT
+  # ===========================================================================
+  /api/admin/jobs:
+    get:
+      tags: [Admin - Operations]
+      summary: List provision jobs
+      parameters:
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: status
+          schema: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED, DEAD_LETTER] }
+        - in: query
+          name: type
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/ProvisionJob' } }
+
+  /api/admin/audit-log:
+    get:
+      tags: [Admin - Operations]
+      summary: Paginated audit log
+      parameters:
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: actorType
+          schema: { type: string }
+        - in: query
+          name: action
+          schema: { type: string }
+        - in: query
+          name: resourceType
+          schema: { type: string }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/AuditLogEntry' } }
+
+  # ===========================================================================
+  # MAIL API
+  # ===========================================================================
+  /api/mail/folders:
+    get:
+      tags: [Mail]
+      summary: List IMAP folders with counts
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  folders: { type: array, items: { $ref: '#/components/schemas/Folder' } }
+
+  /api/mail/messages:
+    get:
+      tags: [Mail]
+      summary: Paginated message list
+      parameters:
+        - { $ref: '#/components/parameters/FolderParam' }
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+        - in: query
+          name: sort
+          schema: { type: string, enum: [date, from, subject, size], default: date }
+        - in: query
+          name: order
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MessageListItem' } }
+    delete:
+      tags: [Mail]
+      summary: Batch delete messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteMessagesRequest' }
+      responses:
+        '204': { description: Messages deleted }
+
+  /api/mail/messages/{uid}:
+    get:
+      tags: [Mail]
+      summary: Get full message
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: { type: integer }
+        - { $ref: '#/components/parameters/FolderParam' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Message' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/mail/messages/{uid}/raw:
+    get:
+      tags: [Mail]
+      summary: Get raw RFC 5322 message
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: { type: integer }
+        - { $ref: '#/components/parameters/FolderParam' }
+      responses:
+        '200':
+          content:
+            text/plain:
+              schema: { type: string }
+
+  /api/mail/threads/{threadId}:
+    get:
+      tags: [Mail]
+      summary: Get threaded conversation
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Thread' }
+
+  /api/mail/send:
+    post:
+      tags: [Mail]
+      summary: Send email
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                to: { type: string, description: "JSON array of email addresses" }
+                cc: { type: string }
+                bcc: { type: string }
+                subject: { type: string }
+                htmlBody: { type: string }
+                textBody: { type: string }
+                inReplyTo: { type: string }
+                references: { type: string }
+                signatureId: { type: string }
+                attachments:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messageId: { type: string }
+                  success: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/mail/draft:
+    post:
+      tags: [Mail]
+      summary: Save a new draft
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveDraftRequest' }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uid: { type: integer }
+                  folder: { type: string }
+
+  /api/mail/draft/{uid}:
+    put:
+      tags: [Mail]
+      summary: Update existing draft
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaveDraftRequest' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uid: { type: integer }
+
+  /api/mail/messages/flags:
+    patch:
+      tags: [Mail]
+      summary: Batch update message flags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateFlagsRequest' }
+      responses:
+        '204': { description: Flags updated }
+
+  /api/mail/messages/move:
+    post:
+      tags: [Mail]
+      summary: Move messages between folders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MoveMessagesRequest' }
+      responses:
+        '204': { description: Messages moved }
+
+  /api/mail/search:
+    get:
+      tags: [Mail]
+      summary: Search messages
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string }
+          description: |
+            Search query with operators:
+            from:, to:, subject:, has:attachment, is:unread, is:starred,
+            before:YYYY-MM-DD, after:YYYY-MM-DD, label:name
+        - { $ref: '#/components/parameters/FolderParam' }
+        - { $ref: '#/components/parameters/PageParam' }
+        - { $ref: '#/components/parameters/PageSizeParam' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: '#/components/schemas/PaginatedResponse' }
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MessageListItem' } }
+
+  /api/mail/attachments/{uid}/{partId}:
+    get:
+      tags: [Mail]
+      summary: Download attachment
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          schema: { type: integer }
+        - in: path
+          name: partId
+          required: true
+          schema: { type: string }
+        - { $ref: '#/components/parameters/FolderParam' }
+      responses:
+        '200':
+          description: Attachment file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/mail/events:
+    get:
+      tags: [Mail]
+      summary: SSE stream for real-time mail events
+      description: |
+        Server-Sent Events endpoint. Connect with EventSource.
+        Events: new_mail, flags_updated, expunge.
+        Uses IMAP IDLE internally.
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  # ===========================================================================
+  # USER SETTINGS
+  # ===========================================================================
+  /api/settings/profile:
+    get:
+      tags: [Settings]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+    put:
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                displayName: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Profile' }
+
+  /api/settings/signatures:
+    get:
+      tags: [Settings]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signatures: { type: array, items: { $ref: '#/components/schemas/SignatureObj' } }
+    post:
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, body]
+              properties:
+                name: { type: string }
+                body: { type: string }
+                isDefault: { type: boolean }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignatureObj' }
+
+  /api/settings/signatures/{id}:
+    put:
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                body: { type: string }
+                isDefault: { type: boolean }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SignatureObj' }
+    delete:
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Signature deleted }
+
+  /api/settings/password:
+    post:
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { description: Password changed }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/settings/labels:
+    get:
+      tags: [Settings]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
+    post:
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Label' }
+
+  /api/settings/labels/{id}:
+    put:
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                color: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Label' }
+    delete:
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Label deleted }
+
+  /api/settings/vacation:
+    get:
+      tags: [Settings]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VacationResponder' }
+    put:
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VacationResponder' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VacationResponder' }
+
+  /api/settings/trusted-senders:
+    get:
+      tags: [Settings]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  senders: { type: array, items: { type: object, properties: { id: { type: string }, email: { type: string } } } }
+    post:
+      tags: [Settings]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '201': { description: Sender added }
+
+  /api/settings/trusted-senders/{id}:
+    delete:
+      tags: [Settings]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: Sender removed }
+
+  /api/settings/contacts:
+    get:
+      tags: [Settings]
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Search query for autocomplete
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
