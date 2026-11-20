@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Mail,
   Plus,
@@ -12,55 +12,59 @@ import {
   X,
   RefreshCw,
   Search,
-} from 'lucide-react';
-import { api } from '@/lib/api';
+} from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function MailboxesAdminPage() {
   const [mailboxes, setMailboxes] = useState<any[]>([]);
   const [domains, setDomains] = useState<any[]>([]);
-  const [selectedDomain, setSelectedDomain] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDomain, setSelectedDomain] = useState<string>("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Add Mailbox Modal
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [newUsername, setNewUsername] = useState('');
-  const [newDomainId, setNewDomainId] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [newUsername, setNewUsername] = useState("");
+  const [newDomainId, setNewDomainId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [newQuotaMB, setNewQuotaMB] = useState(1024);
   const [creating, setCreating] = useState(false);
 
   // Edit / Password Reset Modal
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [activeMailbox, setActiveMailbox] = useState<any>(null);
-  const [resetPassword, setResetPassword] = useState('');
+  const [resetPassword, setResetPassword] = useState("");
   const [editQuotaMB, setEditQuotaMB] = useState(1024);
   const [updating, setUpdating] = useState(false);
 
-  useEffect(() => {
-    loadDomains();
-    loadMailboxes();
-  }, [selectedDomain]);
-
-  const loadDomains = async () => {
+  const loadDomains = useCallback(async () => {
     try {
       const res = await api.listAdminDomains(1, 100);
       const list = res.data || (Array.isArray(res) ? res : []);
       setDomains(list);
-      if (list.length > 0 && !newDomainId) setNewDomainId(list[0].id);
+      if (list.length > 0) setNewDomainId((current) => current || list[0].id);
     } catch (_) {}
-  };
+  }, []);
 
-  const loadMailboxes = async () => {
+  const loadMailboxes = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.listAdminMailboxes(selectedDomain || undefined, 1, 100);
+      const res = await api.listAdminMailboxes(
+        selectedDomain || undefined,
+        1,
+        100,
+      );
       setMailboxes(res.data || (Array.isArray(res) ? res : []));
-    } catch (_) {}
-    finally {
+    } catch (_) {
+    } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDomain]);
+
+  useEffect(() => {
+    void loadDomains();
+    void loadMailboxes();
+  }, [loadDomains, loadMailboxes]);
 
   const handleCreateMailbox = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,8 +83,8 @@ export default function MailboxesAdminPage() {
         domainId: newDomainId,
       });
 
-      setNewUsername('');
-      setNewPassword('');
+      setNewUsername("");
+      setNewPassword("");
       setAddModalOpen(false);
       alert(`Mailbox '${fullEmail}' provisioning job queued successfully!`);
       loadMailboxes();
@@ -102,9 +106,9 @@ export default function MailboxesAdminPage() {
         quotaBytes: editQuotaMB * 1024 * 1024,
       });
       setEditModalOpen(false);
-      setResetPassword('');
+      setResetPassword("");
       loadMailboxes();
-      alert('Mailbox updated successfully!');
+      alert("Mailbox updated successfully!");
     } catch (err: any) {
       alert(`Error updating mailbox: ${err.message}`);
     } finally {
@@ -113,7 +117,12 @@ export default function MailboxesAdminPage() {
   };
 
   const handleDeleteMailbox = async (id: string, email: string) => {
-    if (!confirm(`Are you sure you want to delete mailbox '${email}'? Maildir will be marked for cleanup.`)) return;
+    if (
+      !confirm(
+        `Are you sure you want to delete mailbox '${email}'? Maildir will be marked for cleanup.`,
+      )
+    )
+      return;
     try {
       await api.deleteAdminMailbox(id);
       loadMailboxes();
@@ -123,16 +132,21 @@ export default function MailboxesAdminPage() {
   };
 
   const filtered = mailboxes.filter((m) =>
-    searchTerm ? m.email.toLowerCase().includes(searchTerm.toLowerCase()) : true,
+    searchTerm
+      ? m.email.toLowerCase().includes(searchTerm.toLowerCase())
+      : true,
   );
 
   return (
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Mailbox Provisioning</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Mailbox Provisioning
+          </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Manage virtual user mailboxes, storage quotas, and security credentials
+            Manage virtual user mailboxes, storage quotas, and security
+            credentials
           </p>
         </div>
         <button
@@ -201,18 +215,26 @@ export default function MailboxesAdminPage() {
               </tr>
             ) : (
               filtered.map((mb) => {
-                const quotaMB = Math.round((Number(mb.quotaBytes) || 1073741824) / (1024 * 1024));
+                const quotaMB = Math.round(
+                  (Number(mb.quotaBytes) || 1073741824) / (1024 * 1024),
+                );
                 const usedMB = 12; // Telemetry usage approximation
-                const percent = Math.min(Math.round((usedMB / quotaMB) * 100), 100);
+                const percent = Math.min(
+                  Math.round((usedMB / quotaMB) * 100),
+                  100,
+                );
 
                 return (
-                  <tr key={mb.id} className="hover:bg-zinc-800/40 transition-colors">
+                  <tr
+                    key={mb.id}
+                    className="hover:bg-zinc-800/40 transition-colors"
+                  >
                     <td className="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
                       <Mail className="w-4 h-4 text-indigo-400" />
                       {mb.email}
                     </td>
                     <td className="py-3.5 px-4 font-mono text-zinc-400">
-                      {mb.domain?.name || mb.email.split('@')[1]}
+                      {mb.domain?.name || mb.email.split("@")[1]}
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="w-48 space-y-1">
@@ -230,7 +252,7 @@ export default function MailboxesAdminPage() {
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/20">
-                        {mb.isActive ? 'ACTIVE' : 'SUSPENDED'}
+                        {mb.isActive ? "ACTIVE" : "SUSPENDED"}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right space-x-2">
@@ -344,7 +366,7 @@ export default function MailboxesAdminPage() {
                   disabled={creating}
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
                 >
-                  {creating ? 'Queueing...' : 'Provision Mailbox'}
+                  {creating ? "Queueing..." : "Provision Mailbox"}
                 </button>
               </div>
             </form>
@@ -357,7 +379,9 @@ export default function MailboxesAdminPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-white">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="font-bold text-sm">Edit: {activeMailbox?.email}</h3>
+              <h3 className="font-bold text-sm">
+                Edit: {activeMailbox?.email}
+              </h3>
               <button
                 onClick={() => setEditModalOpen(false)}
                 className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
@@ -406,7 +430,7 @@ export default function MailboxesAdminPage() {
                   disabled={updating}
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
                 >
-                  {updating ? 'Saving...' : 'Save Changes'}
+                  {updating ? "Saving..." : "Save Changes"}
                 </button>
               </div>
             </form>

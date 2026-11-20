@@ -1,12 +1,20 @@
-import { createMailClient, closeMailClient } from '../mail/services/mail-connection';
-import { accessTokenSeconds, refreshTokenSeconds } from './token-lifetime';
-import { Injectable, UnauthorizedException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import * as argon2 from 'argon2';
-import * as crypto from 'crypto';
-import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto } from './dto/login.dto';
+import {
+  createMailClient,
+  closeMailClient,
+} from "../mail/services/mail-connection";
+import { accessTokenSeconds, refreshTokenSeconds } from "./token-lifetime";
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import { ConfigService } from "@nestjs/config";
+import * as argon2 from "argon2";
+import * as crypto from "crypto";
+import { PrismaService } from "../prisma/prisma.service";
+import { LoginDto } from "./dto/login.dto";
 
 @Injectable()
 export class AuthService {
@@ -19,10 +27,13 @@ export class AuthService {
   /**
    * Helper to verify password against Argon2id hash (with or without {ARGON2ID} prefix).
    */
-  async verifyPassword(storedHash: string, plainText: string): Promise<boolean> {
+  async verifyPassword(
+    storedHash: string,
+    plainText: string,
+  ): Promise<boolean> {
     try {
-      const cleanHash = storedHash.startsWith('{ARGON2ID}')
-        ? storedHash.replace('{ARGON2ID}', '')
+      const cleanHash = storedHash.startsWith("{ARGON2ID}")
+        ? storedHash.replace("{ARGON2ID}", "")
         : storedHash;
       return await argon2.verify(cleanHash, plainText);
     } catch (e) {
@@ -49,18 +60,33 @@ export class AuthService {
       include: { domain: true },
     });
 
-    if (!mailbox || !mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
-      throw new UnauthorizedException('Invalid email or password');
+    if (
+      !mailbox ||
+      !mailbox.isActive ||
+      mailbox.deletedAt ||
+      !mailbox.domain.isActive ||
+      mailbox.domain.deletedAt
+    ) {
+      throw new UnauthorizedException("Invalid email or password");
     }
 
     // Dovecot is the mailbox authentication authority; database hashes are used
     // directly only for the separate administrator identity.
     const client = createMailClient(mailbox.email, dto.password);
-    try { await client.connect(); }
-    catch (error) {
-      if (error.authenticationFailed || /Authentication/i.test(error.code || '')) throw new UnauthorizedException('Invalid email or password');
-      throw new ServiceUnavailableException('Mailbox authentication is temporarily unavailable');
-    } finally { await closeMailClient(client); }
+    try {
+      await client.connect();
+    } catch (error) {
+      if (
+        error.authenticationFailed ||
+        /Authentication/i.test(error.code || "")
+      )
+        throw new UnauthorizedException("Invalid email or password");
+      throw new ServiceUnavailableException(
+        "Mailbox authentication is temporarily unavailable",
+      );
+    } finally {
+      await closeMailClient(client);
+    }
 
     // Update last login
     await this.prisma.mailbox.update({
@@ -71,13 +97,19 @@ export class AuthService {
     const tokens = await this.generateTokens({
       sub: mailbox.id,
       email: mailbox.email,
-      role: 'MAILBOX',
+      role: "MAILBOX",
       isMailbox: true,
       isAdmin: false,
     });
 
     // Store refresh token
-    await this.storeRefreshToken(mailbox.id, null, tokens.refreshToken, ipAddress, userAgent);
+    await this.storeRefreshToken(
+      mailbox.id,
+      null,
+      tokens.refreshToken,
+      ipAddress,
+      userAgent,
+    );
 
     return {
       accessToken: tokens.accessToken,
@@ -87,7 +119,7 @@ export class AuthService {
         id: mailbox.id,
         email: mailbox.email,
         displayName: mailbox.displayName,
-        role: 'MAILBOX',
+        role: "MAILBOX",
         domain: mailbox.domain.name,
       },
     };
@@ -102,12 +134,12 @@ export class AuthService {
     });
 
     if (!admin) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException("Invalid email or password");
     }
 
     const isValid = await this.verifyPassword(admin.passwordHash, dto.password);
     if (!isValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException("Invalid email or password");
     }
 
     await this.prisma.adminUser.update({
@@ -123,7 +155,13 @@ export class AuthService {
       isAdmin: true,
     });
 
-    await this.storeRefreshToken(null, admin.id, tokens.refreshToken, ipAddress, userAgent);
+    await this.storeRefreshToken(
+      null,
+      admin.id,
+      tokens.refreshToken,
+      ipAddress,
+      userAgent,
+    );
 
     return {
       accessToken: tokens.accessToken,
@@ -141,20 +179,31 @@ export class AuthService {
   /**
    * Token refresh with automatic rotation
    */
-  async refreshTokens(refreshTokenStr: string, ipAddress?: string, userAgent?: string) {
+  async refreshTokens(
+    refreshTokenStr: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
     if (!refreshTokenStr) {
-      throw new UnauthorizedException('Refresh token missing');
+      throw new UnauthorizedException("Refresh token missing");
     }
 
-    const hashedToken = crypto.createHash('sha256').update(refreshTokenStr).digest('hex');
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(refreshTokenStr)
+      .digest("hex");
 
     const tokenRecord = await this.prisma.refreshToken.findUnique({
       where: { token: hashedToken },
       include: { mailbox: { include: { domain: true } }, adminUser: true },
     });
 
-    if (!tokenRecord || tokenRecord.revokedAt || new Date() > tokenRecord.expiresAt) {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+    if (
+      !tokenRecord ||
+      tokenRecord.revokedAt ||
+      new Date() > tokenRecord.expiresAt
+    ) {
+      throw new UnauthorizedException("Invalid or expired refresh token");
     }
 
     let payload: any;
@@ -172,34 +221,52 @@ export class AuthService {
       };
     } else if (tokenRecord.mailboxId && tokenRecord.mailbox) {
       const mailbox = tokenRecord.mailbox;
-      if (!mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
-        throw new UnauthorizedException('Mailbox account inactive');
+      if (
+        !mailbox.isActive ||
+        mailbox.deletedAt ||
+        !mailbox.domain.isActive ||
+        mailbox.domain.deletedAt
+      ) {
+        throw new UnauthorizedException("Mailbox account inactive");
       }
       mailboxId = tokenRecord.mailboxId;
       payload = {
         sub: tokenRecord.mailbox.id,
         email: tokenRecord.mailbox.email,
-        role: 'MAILBOX',
+        role: "MAILBOX",
         isMailbox: true,
         isAdmin: false,
       };
     } else {
-      throw new UnauthorizedException('Invalid token owner');
+      throw new UnauthorizedException("Invalid token owner");
     }
 
     const newTokens = await this.generateTokens(payload);
     // Compare-and-set inside a transaction: concurrent use can rotate only once.
     await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.refreshToken.updateMany({
-        where: { id: tokenRecord.id, revokedAt: null, expiresAt: { gt: new Date() } },
+        where: {
+          id: tokenRecord.id,
+          revokedAt: null,
+          expiresAt: { gt: new Date() },
+        },
         data: { revokedAt: new Date() },
       });
-      if (claimed.count !== 1) throw new UnauthorizedException('Refresh token already used');
-      await tx.refreshToken.create({ data: {
-        token: crypto.createHash('sha256').update(newTokens.refreshToken).digest('hex'),
-        mailboxId, adminUserId: adminId, expiresAt: new Date(Date.now() + refreshTokenSeconds() * 1000),
-        ipAddress, deviceInfo: userAgent,
-      } });
+      if (claimed.count !== 1)
+        throw new UnauthorizedException("Refresh token already used");
+      await tx.refreshToken.create({
+        data: {
+          token: crypto
+            .createHash("sha256")
+            .update(newTokens.refreshToken)
+            .digest("hex"),
+          mailboxId,
+          adminUserId: adminId,
+          expiresAt: new Date(Date.now() + refreshTokenSeconds() * 1000),
+          ipAddress,
+          deviceInfo: userAgent,
+        },
+      });
     });
 
     return {
@@ -214,7 +281,10 @@ export class AuthService {
    */
   async logout(refreshTokenStr: string) {
     if (!refreshTokenStr) return;
-    const hashedToken = crypto.createHash('sha256').update(refreshTokenStr).digest('hex');
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(refreshTokenStr)
+      .digest("hex");
     await this.prisma.refreshToken.updateMany({
       where: { token: hashedToken, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -225,7 +295,7 @@ export class AuthService {
     const accessToken = this.jwtService.sign(payload, {
       expiresIn: accessTokenSeconds(),
     });
-    const refreshToken = crypto.randomBytes(40).toString('hex');
+    const refreshToken = crypto.randomBytes(40).toString("hex");
     return { accessToken, refreshToken };
   }
 
@@ -236,7 +306,10 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ) {
-    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
     const expiresAt = new Date();
     expiresAt.setTime(Date.now() + refreshTokenSeconds() * 1000); // 7 days
 

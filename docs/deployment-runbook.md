@@ -1,173 +1,67 @@
-# MailHive Production Deployment Runbook 🚀
+# Deployment and recovery runbook
 
-This runbook guides system administrators through deploying MailHive onto a clean Linux VPS (Ubuntu 22.04 / 24.04 LTS or Debian 12) with Let's Encrypt TLS certificates, firewall security, automated cron backups, and production tuning.
+This is a single-host Compose deployment. The local acceptance results are recorded in [application-review.md](application-review.md). Public deliverability and production HTTPS must be verified on the actual host before release.
 
----
+## Configuration and prerequisites
 
-## 📋 System Requirements
+Use a Linux host with Docker Compose, a static public IP, outbound port 25, sufficient SSD capacity and working authoritative DNS. Start with 4 CPU cores and 4–8 GiB RAM; size disk and backups for the actual quotas. Provision a reverse proxy for webmail HTTPS. Do not publish the internal API, databases, Rspamd controller, LMTP or Dovecot auth ports. Docker port publishing can bypass host firewall rules: use provider firewall rules and Docker-aware filtering.
 
-- **OS:** Ubuntu 22.04 / 24.04 LTS or Debian 12
-- **CPU:** Minimum 2 vCPUs (4 vCPUs recommended for >50 users)
-- **RAM:** Minimum 4 GB RAM (Rspamd + Redis + NestJS + Next.js + Dovecot)
-- **Disk:** 40+ GB SSD (scale according to mailbox volume)
-- **Network:** Static IPv4 address with reverse DNS (PTR) capability; Port 25 unblocked by host (verify cloud provider has opened outbound port 25).
+Copy `.env.example` to `.env`. Set `POSTGRES_DB=mailhive` and `POSTGRES_USER=mailhive` (the daemon SQL maps currently use these names). Generate distinct secrets with `openssl rand -hex 32`. Set `DATABASE_URL` to the `postgres` Compose hostname and URL-encode any non-hex password. Never use `.env.dev` on a public server.
 
----
+Required production settings:
 
-## 🔒 1. Firewall Configuration (UFW)
+- `APP_URL=https://webmail.yourdomain.com` — exact browser origin; comma-separated origins are supported.
+- `MAIL_HOSTNAME=mail.yourdomain.com`, `MAIL_DOMAIN=yourdomain.com`.
+- `JWT_SECRET` (32+ characters), `JWT_ACCESS_EXPIRY=15m`, `JWT_REFRESH_EXPIRY=7d`.
+- Unique `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `RSPAMD_PASSWORD`, `DOVECOT_MASTER_PASSWORD`; optional `DOVECOT_MASTER_USER` defaults to `mailhive_master`.
+- `MAIL_TLS_REJECT_UNAUTHORIZED=true`, `MAIL_TLS_SERVERNAME=mail.yourdomain.com`, `COOKIE_SECURE=true`.
 
-Enable standard ports while restricting administrative ports to trusted management IPs:
+The API rejects insecure production cookie/TLS settings and missing secrets. For a private mail CA, mount a CA bundle into the API and set `NODE_EXTRA_CA_CERTS` in its Compose environment. The development override explicitly permits the local self-signed certificate and HTTP cookies.
 
-```bash
-# Allow SSH
-sudo ufw allow 22/tcp
+## TLS and startup
 
-# Allow Webmail & Reverse Proxy (HTTP & HTTPS)
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Allow Public Mail Ports
-sudo ufw allow 25/tcp    # Inbound SMTP
-sudo ufw allow 465/tcp   # SMTPS (Implicit TLS)
-sudo ufw allow 587/tcp   # Submission (STARTTLS)
-sudo ufw allow 993/tcp   # IMAPS (Implicit TLS)
-sudo ufw allow 4190/tcp  # ManageSieve (Optional)
-
-# Enable UFW
-sudo ufw enable
-```
-
-> [!CAUTION]
-> Never expose PostgreSQL (`5432`) or Redis (`6379`) to the public internet! MailHive compose networks (`appnet`, `mailnet`) isolate these internally.
-
----
-
-## 🔐 2. TLS / SSL Certificates (Let's Encrypt with Certbot)
-
-Install Certbot to obtain valid trusted certificates for your mail hostname (e.g. `mail.yourdomain.com`):
+Obtain certificates using Certbot with DNS validation or an HTTP challenge served by the reverse proxy. Install the full chain as `certs/mail.crt` (0644) and private key as `certs/mail.key` (0600). The mail containers mount this directory read-only. Configure Certbot's deploy hook to invoke the absolute path to `scripts/renew-mail-certs.sh`; it uses `RENEWED_LINEAGE`, replaces both files and reloads Postfix/Dovecot. Verify renewal with `certbot renew --dry-run`. Configure the web reverse proxy separately for HTTPS and SSE streaming (disable buffering and allow long-lived responses).
 
 ```bash
-sudo apt update && sudo apt install -y certbot
+# Database first, then a dedicated migration container with the Prisma CLI.
+docker compose up -d postgres redis
+docker compose --profile tools run --rm --build migrate
+docker compose up -d --build --wait
 
-# Request certificate using standalone mode (make sure port 80 is temporarily free)
-sudo certbot certonly --standalone -d mail.yourdomain.com -d webmail.yourdomain.com
+# Export these from a secure operator session; the password is not a CLI argument.
+export ADMIN_EMAIL
+export ADMIN_PASSWORD
+docker compose exec -e ADMIN_EMAIL -e ADMIN_PASSWORD api node scripts/create-admin.cjs
 
-# Create certs directory in MailHive project root
-mkdir -p certs
-
-# Link or copy certificates into ./certs/
-sudo cp /etc/letsencrypt/live/mail.yourdomain.com/fullchain.pem ./certs/cert.pem
-sudo cp /etc/letsencrypt/live/mail.yourdomain.com/privkey.pem ./certs/key.pem
-sudo chmod 600 ./certs/key.pem
-sudo chmod 644 ./certs/cert.pem
+curl --fail http://127.0.0.1:4000/api/health
 ```
 
-### Automated Renewal Hook
-Create `/etc/letsencrypt/renewal-hooks/deploy/mailhive-reload.sh`:
-```bash
-#!/bin/bash
-PROJECT_DIR="/opt/mailhive"
-cp /etc/letsencrypt/live/mail.yourdomain.com/fullchain.pem ${PROJECT_DIR}/certs/cert.pem
-cp /etc/letsencrypt/live/mail.yourdomain.com/privkey.pem ${PROJECT_DIR}/certs/key.pem
-chmod 600 ${PROJECT_DIR}/certs/key.pem
-chmod 644 ${PROJECT_DIR}/certs/cert.pem
-docker exec mailhive-postfix postfix reload
-docker exec mailhive-dovecot doveadm reload
-```
-Make it executable:
-```bash
-chmod +x /etc/letsencrypt/renewal-hooks/deploy/mailhive-reload.sh
-```
+`ADMIN_PASSWORD` must contain at least 16 characters. Existing administrators are never overwritten. Create domains and mailboxes through the admin UI and wait for their provisioning jobs to complete. The development seed is explicitly disabled in production. The API and web containers run as non-root users; the API has no Docker socket. The API worker writes Maildir and DKIM volumes using UID/GID 5000. Dovecot and Rspamd prepare volume permissions on startup.
 
----
+## Storage, jobs and monitoring
 
-## ⚙️ 3. Production Environment File (`.env`)
+Persist all five volumes: PostgreSQL, Redis, Maildir, Rspamd/DKIM, and the Postfix queue. Redis uses `noeviction` because evicting BullMQ keys can lose jobs. Monitor memory and disk capacity; a full Redis must be expanded instead of switching back to LRU eviction.
 
-Generate strong secrets and configure `.env`:
+Provisioning records are durable in PostgreSQL. The worker reconciles missing queue entries every 30 seconds, retries with exponential backoff, and marks exhausted jobs `DEAD_LETTER`. Fix the underlying error and use the admin job Retry button or `POST /api/admin/jobs/:id/retry`. Mailbox deletion disables authentication/delivery and archives data under `/var/vmail/.deleted/<mailbox-id>`; purge retained mail under an explicit retention policy.
 
-```bash
-# Generate high-entropy secrets
-openssl rand -hex 32  # For JWT_SECRET
-openssl rand -hex 24  # For POSTGRES_PASSWORD
-openssl rand -hex 24  # For REDIS_PASSWORD
-openssl rand -hex 24  # For RSPAMD_PASSWORD
-openssl rand -hex 24  # For DOVECOT_MASTER_PASSWORD
-```
+`/api/health` checks PostgreSQL, Redis and mail TCP endpoints and returns 503 when degraded. `/api/metrics` exports process and account metrics. Restrict metrics and API documentation at the reverse proxy to your monitoring/administrative network. Use `docker compose logs` for structured API logs and daemon logs; ship them to your log collector. Container health checks do not replace external alerts or an end-to-end delivery probe.
 
-Save to `.env`:
-```ini
-NODE_ENV=production
-MAIL_HOSTNAME=mail.yourdomain.com
-MAIL_DOMAIN=yourdomain.com
-MESSAGE_SIZE_LIMIT=52428800 # 50 MB
+## Backup and restore
 
-# Postgres
-POSTGRES_DB=mailhive
-POSTGRES_USER=mailhive
-POSTGRES_PASSWORD=<STRONG_POSTGRES_PASSWORD>
-DATABASE_URL=postgresql://mailhive:<STRONG_POSTGRES_PASSWORD>@postgres:5432/mailhive?schema=public
+Run `scripts/backup.sh /secure/backup/path` from the Docker host. It briefly stops API/mail/Redis writers, dumps PostgreSQL, archives Maildir, DKIM/Rspamd, Postfix spool and Redis persistence, writes SHA256 checksums, then restarts only services that were running. Plan this maintenance interruption. Keep encrypted copies off-host and restrict backup access: archives contain mail and credentials.
 
-# Redis
-REDIS_PASSWORD=<STRONG_REDIS_PASSWORD>
+Verify every backup with `scripts/test-restore-isolated.sh /secure/backup/path`. It restores SQL into a disposable PostgreSQL container and compares extracted archive bytes. It never restores over live volumes.
 
-# Rspamd
-RSPAMD_PASSWORD=<STRONG_RSPAMD_PASSWORD>
+For actual disaster recovery:
 
-# Dovecot Master Auth
-DOVECOT_MASTER_USER=mailhive_master
-DOVECOT_MASTER_PASSWORD=<STRONG_DOVECOT_MASTER_PASSWORD>
+1. Preserve a copy of the current data and verify you selected the right snapshot.
+2. Stop `api`, `postfix`, `dovecot`, `rspamd`, and `redis`; leave PostgreSQL running.
+3. Run `RESTORE_CONFIRM=replace-stopped-stack scripts/restore.sh latest /secure/backup/path`. Missing/mismatched checksums and SQL errors stop restoration.
+4. Start Redis and mail services, then the API/web. Run `doveadm force-resync` for affected mailboxes and check provisioning reconciliation, queues, authentication, sample attachments, and send/receive.
+5. Keep the previous volumes until recovery acceptance is complete.
 
-# JWT Authentication
-JWT_SECRET=<STRONG_JWT_SECRET>
-JWT_ACCESS_EXPIRY=15m
-JWT_REFRESH_EXPIRY=7d
-APP_URL=https://webmail.yourdomain.com
-```
+Do not run the legacy destructive `test-backup-restore.py` against an active deployment; use the isolated script.
 
----
+## Release gates
 
-## 🚀 4. Deployment Execution
-
-```bash
-# 1. Build and start containers
-docker compose up -d --build
-
-# 2. Run Database Migrations
-docker compose exec api npx prisma migrate deploy
-
-# 3. Create Super Admin Account
-docker compose exec api npm run seed
-
-# 4. Check Health Status
-curl -s http://localhost:4000/api/health | jq .
-```
-
----
-
-## ⏰ 5. Automated Backups with Cron
-
-Set up nightly automated backups at 02:00 AM using `cron`:
-
-```bash
-sudo crontab -e
-```
-
-Add the following entry:
-```crontab
-0 2 * * * /opt/mailhive/scripts/backup.sh /var/backups/mailhive >> /var/log/mailhive-backup.log 2>&1
-```
-
-### Offsite Sync (Optional but Recommended)
-Sync backups to AWS S3 or Backblaze B2 using `rclone`:
-```crontab
-30 2 * * * rclone sync /var/backups/mailhive remote:my-mailhive-backups/
-```
-
----
-
-## 📈 6. Monitoring & Observability
-
-- **Health Check Endpoint:** `GET /api/health`
-  - Monitored by Uptime Kuma, Datadog, or Prometheus Blackbox exporter.
-- **Prometheus Metrics:** `GET /api/metrics`
-  - Scraped every 15s to chart memory, CPU, mailbox counts, and HTTP throughput.
+Verify MX, exact SPF policy, published DKIM key and DMARC in authoritative DNS; PTR must match `MAIL_HOSTNAME`. Test delivery both ways with independent external providers and verify their authentication results. Configure MTA-STS/TLS-RPT if publishing those policies. Test trusted TLS on 465/587/993, expired/revoked sessions, relay denial, host-level brute-force protection, encrypted backup retention, monitoring alerts and disaster recovery. The repository's local tests cannot certify IP reputation, public DNS, provider restrictions or certificate renewal on your host.

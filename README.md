@@ -1,10 +1,8 @@
 # MailHive 📬
 
-[![Architecture: Production-Ready](https://img.shields.io/badge/Architecture-Production--Ready-blue.svg)](#architecture)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](#license)
-[![WCAG 2.1 AA Compliant](https://img.shields.io/badge/A11y-WCAG%202.1%20AA-success.svg)](#accessibility)
+**MailHive** is a self-hosted, multi-domain email platform built with Postfix, Dovecot, Rspamd, PostgreSQL, Redis, NestJS and Next.js.
 
-**MailHive** is an enterprise-grade, self-hosted, multi-domain email platform pairing a modern mail server core (Postfix, Dovecot, Rspamd, PostgreSQL, Redis) with a Gmail-style Next.js webmail interface and an intuitive administration dashboard.
+See [application revision and verification](docs/application-review.md) for the phase 0–7 audit and [deployment runbook](docs/deployment-runbook.md) for production configuration and release gates. Local acceptance tests do not establish public deliverability or complete Gmail feature parity.
 
 ---
 
@@ -78,9 +76,8 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.d
 ### 4. Database Setup & Seeding
 Deploy database schemas and seed initial domain and accounts:
 ```bash
-cd apps/api
-npx prisma migrate deploy
-npm run seed
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm --build migrate
+docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm -e SEED_DEVELOPMENT=true -e NODE_ENV=development migrate npx ts-node prisma/seed.ts
 ```
 
 ---
@@ -177,7 +174,7 @@ python3 scripts/test-phase2.py
 python3 scripts/test-phase3.py
 
 # 3. Verify Backup & Restore Pipeline with Real Data Recovery (Phase 6)
-./scripts/test-backup-restore.py
+./scripts/test-restore-isolated.sh /path/to/backup
 
 # 4. Verify Webmail, Admin UI, and Accessibility (Playwright E2E)
 cd apps/web && npx playwright test

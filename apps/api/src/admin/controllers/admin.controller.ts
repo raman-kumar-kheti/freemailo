@@ -12,31 +12,39 @@ import {
   HttpStatus,
   ParseIntPipe,
   BadRequestException,
-} from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AdminService } from '../services/admin.service';
-import { ProvisioningService } from '../../provisioning/provisioning.service';
-import { CreateDomainDto } from '../dto/create-domain.dto';
-import { CreateMailboxDto } from '../dto/create-mailbox.dto';
-import { UpdateMailboxDto } from '../dto/update-mailbox.dto';
-import { CreateAliasDto } from '../dto/create-alias.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles, UserRole } from '../../common/decorators/roles.decorator';
-import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+} from "@nestjs/common";
+import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
+import { AdminService } from "../services/admin.service";
+import { ProvisioningService } from "../../provisioning/provisioning.service";
+import { CreateDomainDto } from "../dto/create-domain.dto";
+import { CreateMailboxDto } from "../dto/create-mailbox.dto";
+import { UpdateMailboxDto } from "../dto/update-mailbox.dto";
+import { CreateAliasDto } from "../dto/create-alias.dto";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../../common/guards/roles.guard";
+import { Roles, UserRole } from "../../common/decorators/roles.decorator";
+import {
+  CurrentUser,
+  AuthenticatedUser,
+} from "../../common/decorators/current-user.decorator";
 
-function paginationNumber(value: unknown, fallback: number, maximum: number): number {
-  if (value === undefined || value === '') return fallback;
+function paginationNumber(
+  value: unknown,
+  fallback: number,
+  maximum: number,
+): number {
+  if (value === undefined || value === "") return fallback;
   const result = Number(value);
-  if (!Number.isSafeInteger(result) || result < 1 || result > maximum) throw new BadRequestException('Invalid pagination');
+  if (!Number.isSafeInteger(result) || result < 1 || result > maximum)
+    throw new BadRequestException("Invalid pagination");
   return result;
 }
 
-@ApiTags('Admin')
+@ApiTags("Admin")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-@Controller('api/admin')
+@Controller("api/admin")
 export class AdminController {
   constructor(
     private adminService: AdminService,
@@ -47,19 +55,23 @@ export class AdminController {
   // DOMAINS
   // =========================================================================
 
-  @Get('domains')
-  @ApiOperation({ summary: 'List all domains' })
+  @Get("domains")
+  @ApiOperation({ summary: "List all domains" })
   listDomains(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('search') search?: string,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+    @Query("search") search?: string,
   ) {
-    return this.adminService.listDomains(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), search);
+    return this.adminService.listDomains(
+      paginationNumber(page, 1, 100000),
+      paginationNumber(pageSize, 50, 100),
+      search,
+    );
   }
 
-  @Post('domains')
+  @Post("domains")
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Add a new domain' })
+  @ApiOperation({ summary: "Add a new domain" })
   createDomain(
     @Body() dto: CreateDomainDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -67,32 +79,32 @@ export class AdminController {
     return this.adminService.createDomain(dto, user.id);
   }
 
-  @Get('domains/:id')
-  @ApiOperation({ summary: 'Get domain details' })
-  getDomain(@Param('id') id: string) {
+  @Get("domains/:id")
+  @ApiOperation({ summary: "Get domain details" })
+  getDomain(@Param("id") id: string) {
     return this.adminService.getDomain(id);
   }
 
-  @Delete('domains/:id')
+  @Delete("domains/:id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Soft delete domain' })
+  @ApiOperation({ summary: "Soft delete domain" })
   deleteDomain(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.adminService.deleteDomain(id, user.id);
   }
 
-  @Get('domains/:id/dns')
-  @ApiOperation({ summary: 'Get required DNS records for domain' })
-  getDomainDns(@Param('id') id: string) {
+  @Get("domains/:id/dns")
+  @ApiOperation({ summary: "Get required DNS records for domain" })
+  getDomainDns(@Param("id") id: string) {
     return this.adminService.getDomainDnsRecords(id);
   }
 
-  @Post('domains/:id/verify')
+  @Post("domains/:id/verify")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Trigger DNS verification check' })
-  verifyDomainDns(@Param('id') id: string) {
+  @ApiOperation({ summary: "Trigger DNS verification check" })
+  verifyDomainDns(@Param("id") id: string) {
     return this.adminService.verifyDomainDns(id);
   }
 
@@ -100,13 +112,13 @@ export class AdminController {
   // MAILBOXES
   // =========================================================================
 
-  @Get('mailboxes')
-  @ApiOperation({ summary: 'List mailboxes' })
+  @Get("mailboxes")
+  @ApiOperation({ summary: "List mailboxes" })
   listMailboxes(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('domainId') domainId?: string,
-    @Query('search') search?: string,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+    @Query("domainId") domainId?: string,
+    @Query("search") search?: string,
   ) {
     return this.adminService.listMailboxes(
       paginationNumber(page, 1, 100000),
@@ -116,9 +128,9 @@ export class AdminController {
     );
   }
 
-  @Post('mailboxes')
+  @Post("mailboxes")
   @HttpCode(HttpStatus.ACCEPTED)
-  @ApiOperation({ summary: 'Create new mailbox and trigger provisioning' })
+  @ApiOperation({ summary: "Create new mailbox and trigger provisioning" })
   createMailbox(
     @Body() dto: CreateMailboxDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -126,27 +138,27 @@ export class AdminController {
     return this.adminService.createMailbox(dto, user.id);
   }
 
-  @Get('mailboxes/:id')
-  @ApiOperation({ summary: 'Get mailbox details' })
-  getMailbox(@Param('id') id: string) {
+  @Get("mailboxes/:id")
+  @ApiOperation({ summary: "Get mailbox details" })
+  getMailbox(@Param("id") id: string) {
     return this.adminService.getMailbox(id);
   }
 
-  @Patch('mailboxes/:id')
-  @ApiOperation({ summary: 'Update mailbox attributes or password' })
+  @Patch("mailboxes/:id")
+  @ApiOperation({ summary: "Update mailbox attributes or password" })
   updateMailbox(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: UpdateMailboxDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.adminService.updateMailbox(id, dto, user.id);
   }
 
-  @Delete('mailboxes/:id')
+  @Delete("mailboxes/:id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete mailbox' })
+  @ApiOperation({ summary: "Delete mailbox" })
   deleteMailbox(
-    @Param('id') id: string,
+    @Param("id") id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.adminService.deleteMailbox(id, user.id);
@@ -156,19 +168,23 @@ export class AdminController {
   // ALIASES
   // =========================================================================
 
-  @Get('aliases')
-  @ApiOperation({ summary: 'List aliases' })
+  @Get("aliases")
+  @ApiOperation({ summary: "List aliases" })
   listAliases(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('domainId') domainId?: string,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+    @Query("domainId") domainId?: string,
   ) {
-    return this.adminService.listAliases(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), domainId);
+    return this.adminService.listAliases(
+      paginationNumber(page, 1, 100000),
+      paginationNumber(pageSize, 50, 100),
+      domainId,
+    );
   }
 
-  @Post('aliases')
+  @Post("aliases")
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create alias' })
+  @ApiOperation({ summary: "Create alias" })
   createAlias(
     @Body() dto: CreateAliasDto,
     @CurrentUser() user: AuthenticatedUser,
@@ -176,13 +192,10 @@ export class AdminController {
     return this.adminService.createAlias(dto, user.id);
   }
 
-  @Delete('aliases/:id')
+  @Delete("aliases/:id")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete alias' })
-  deleteAlias(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+  @ApiOperation({ summary: "Delete alias" })
+  deleteAlias(@Param("id") id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.adminService.deleteAlias(id, user.id);
   }
 
@@ -190,29 +203,43 @@ export class AdminController {
   // JOBS & AUDIT
   // =========================================================================
 
-  @Get('jobs')
-  @ApiOperation({ summary: 'List provisioning queue jobs' })
+  @Get("jobs")
+  @ApiOperation({ summary: "List provisioning queue jobs" })
   listJobs(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('status') status?: any,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+    @Query("status") status?: any,
   ) {
-    return this.provisioning.listJobs(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), status);
+    return this.provisioning.listJobs(
+      paginationNumber(page, 1, 100000),
+      paginationNumber(pageSize, 50, 100),
+      status,
+    );
   }
 
-  @Get('jobs/:id')
-  @ApiOperation({ summary: 'Get provisioning job status' })
-  getJob(@Param('id') id: string) {
+  @Post("jobs/:id/retry")
+  @HttpCode(HttpStatus.ACCEPTED)
+  retryJob(@Param("id") id: string) {
+    return this.provisioning.retryJob(id);
+  }
+
+  @Get("jobs/:id")
+  @ApiOperation({ summary: "Get provisioning job status" })
+  getJob(@Param("id") id: string) {
     return this.provisioning.getJobStatus(id);
   }
 
-  @Get('audit-log')
-  @ApiOperation({ summary: 'Query audit logs' })
+  @Get("audit-log")
+  @ApiOperation({ summary: "Query audit logs" })
   getAuditLog(
-    @Query('page') page?: number,
-    @Query('pageSize') pageSize?: number,
-    @Query('action') action?: string,
+    @Query("page") page?: number,
+    @Query("pageSize") pageSize?: number,
+    @Query("action") action?: string,
   ) {
-    return this.adminService.getAuditLogs(paginationNumber(page, 1, 100000), paginationNumber(pageSize, 50, 100), action);
+    return this.adminService.getAuditLogs(
+      paginationNumber(page, 1, 100000),
+      paginationNumber(pageSize, 50, 100),
+      action,
+    );
   }
 }

@@ -80,6 +80,8 @@ echo "[entrypoint] Permissions set."
 # The API worker (UID/GID 5000) writes keys without Docker socket access.
 getent group mailhive-keys >/dev/null || groupadd -g 5000 mailhive-keys
 usermod -a -G mailhive-keys _rspamd
+chgrp 5000 /var/lib/rspamd
+chmod 750 /var/lib/rspamd
 chgrp -R 5000 "${DKIM_DIR}"
 chmod 2770 "${DKIM_DIR}"
 find "${DKIM_DIR}" -type f -name '*.key' -exec chmod 640 {} \;

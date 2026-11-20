@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Forward, Plus, Trash2, Globe, X } from 'lucide-react';
-import { api } from '@/lib/api';
+import React, { useState, useEffect, useCallback } from "react";
+import { Forward, Plus, Trash2, Globe, X } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function AliasesAdminPage() {
   const [aliases, setAliases] = useState<any[]>([]);
@@ -11,39 +11,41 @@ export default function AliasesAdminPage() {
 
   // Add Alias Modal
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [sourceUsername, setSourceUsername] = useState('');
-  const [selectedDomainId, setSelectedDomainId] = useState('');
-  const [destinationEmail, setDestinationEmail] = useState('');
+  const [sourceUsername, setSourceUsername] = useState("");
+  const [selectedDomainId, setSelectedDomainId] = useState("");
+  const [destinationEmail, setDestinationEmail] = useState("");
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    loadDomains();
-    loadAliases();
-  }, []);
-
-  const loadDomains = async () => {
+  const loadDomains = useCallback(async () => {
     try {
       const res = await api.listAdminDomains(1, 100);
       const list = res.data || (Array.isArray(res) ? res : []);
       setDomains(list);
-      if (list.length > 0 && !selectedDomainId) setSelectedDomainId(list[0].id);
+      if (list.length > 0)
+        setSelectedDomainId((current) => current || list[0].id);
     } catch (_) {}
-  };
+  }, []);
 
-  const loadAliases = async () => {
+  const loadAliases = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.listAdminAliases();
       setAliases(res.data || (Array.isArray(res) ? res : []));
-    } catch (_) {}
-    finally {
+    } catch (_) {
+    } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    void loadDomains();
+    void loadAliases();
+  }, [loadDomains, loadAliases]);
 
   const handleCreateAlias = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sourceUsername.trim() || !selectedDomainId || !destinationEmail.trim()) return;
+    if (!sourceUsername.trim() || !selectedDomainId || !destinationEmail.trim())
+      return;
 
     const domainObj = domains.find((d) => d.id === selectedDomainId);
     if (!domainObj) return;
@@ -51,9 +53,13 @@ export default function AliasesAdminPage() {
     setCreating(true);
     try {
       const fullSource = `${sourceUsername.trim()}@${domainObj.name}`;
-      await api.createAdminAlias(fullSource, destinationEmail.trim(), selectedDomainId);
-      setSourceUsername('');
-      setDestinationEmail('');
+      await api.createAdminAlias(
+        fullSource,
+        destinationEmail.trim(),
+        selectedDomainId,
+      );
+      setSourceUsername("");
+      setDestinationEmail("");
       setAddModalOpen(false);
       loadAliases();
     } catch (err: any) {
@@ -77,7 +83,9 @@ export default function AliasesAdminPage() {
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">Aliases & Forwarding</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Aliases & Forwarding
+          </h1>
           <p className="text-xs text-zinc-400 mt-1">
             Map incoming addresses to hosted mailbox destinations
           </p>
@@ -117,20 +125,23 @@ export default function AliasesAdminPage() {
               </tr>
             ) : (
               aliases.map((al) => (
-                <tr key={al.id} className="hover:bg-zinc-800/40 transition-colors">
+                <tr
+                  key={al.id}
+                  className="hover:bg-zinc-800/40 transition-colors"
+                >
                   <td className="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
                     <Forward className="w-4 h-4 text-emerald-400" />
-                    {al.source}
+                    {al.sourceAddress}
                   </td>
                   <td className="py-3.5 px-4 font-mono text-zinc-300">
-                    &rarr; {al.destination}
+                    &rarr; {al.destinationEmail}
                   </td>
                   <td className="py-3.5 px-4 text-zinc-500">
                     {new Date(al.createdAt).toLocaleDateString()}
                   </td>
                   <td className="py-3.5 px-4 text-right">
                     <button
-                      onClick={() => handleDeleteAlias(al.id, al.source)}
+                      onClick={() => handleDeleteAlias(al.id, al.sourceAddress)}
                       className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-colors"
                       title="Delete Alias"
                     >
@@ -213,7 +224,7 @@ export default function AliasesAdminPage() {
                   disabled={creating}
                   className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
                 >
-                  {creating ? 'Creating...' : 'Create Alias'}
+                  {creating ? "Creating..." : "Create Alias"}
                 </button>
               </div>
             </form>

@@ -23,6 +23,7 @@ COPY master.cf /etc/postfix/master.cf
 COPY pgsql-virtual-domains.cf /etc/postfix/pgsql-virtual-domains.cf
 COPY pgsql-virtual-mailboxes.cf /etc/postfix/pgsql-virtual-mailboxes.cf
 COPY pgsql-virtual-aliases.cf /etc/postfix/pgsql-virtual-aliases.cf
+COPY pgsql-virtual-senders.cf /etc/postfix/pgsql-virtual-senders.cf
 
 # Copy and set entrypoint
 COPY entrypoint.sh /entrypoint.sh

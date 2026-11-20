@@ -86,7 +86,8 @@ class ApiClient {
   }
 
   setToken(token: string | null) {
-    this.token = token;
+    // Browser authentication uses HTTP-only cookies; never retain JWTs in JS.
+    this.token = null;
     if (typeof window !== "undefined") {
       localStorage.removeItem("mailhive_token");
     }
@@ -130,13 +131,19 @@ class ApiClient {
       // Concurrent 401 responses share one rotation request.
       if (!this.refreshing) {
         this.refreshing = fetch(`${API_BASE}/auth/refresh`, {
-          method: "POST", credentials: "include",
+          method: "POST",
+          credentials: "include",
           headers: { "X-Requested-With": "MailHive" },
-        }).then(async (response) => {
-          if (!response.ok) return false;
-          this.setToken((await response.json()).accessToken);
-          return true;
-        }).catch(() => false).finally(() => { this.refreshing = null; });
+        })
+          .then(async (response) => {
+            if (!response.ok) return false;
+            this.setToken((await response.json()).accessToken);
+            return true;
+          })
+          .catch(() => false)
+          .finally(() => {
+            this.refreshing = null;
+          });
       }
       if (await this.refreshing) return this.request<T>(path, options, false);
       this.setToken(null);
@@ -144,7 +151,9 @@ class ApiClient {
         typeof window !== "undefined" &&
         !window.location.pathname.startsWith("/login")
       ) {
-        window.location.href = window.location.pathname.startsWith("/admin") ? "/admin/login" : "/login";
+        window.location.href = window.location.pathname.startsWith("/admin")
+          ? "/admin/login"
+          : "/login";
       }
       throw new Error("Unauthorized");
     }
@@ -252,7 +261,8 @@ class ApiClient {
       if (payload.inReplyTo) formData.append("inReplyTo", payload.inReplyTo);
       if (payload.signatureId)
         formData.append("signatureId", payload.signatureId);
-      if (payload.references) formData.append("references", JSON.stringify(payload.references));
+      if (payload.references)
+        formData.append("references", JSON.stringify(payload.references));
       payload.attachments.forEach((file) =>
         formData.append("attachments", file),
       );
@@ -339,11 +349,25 @@ class ApiClient {
 
   // --- Settings ---
   async changePassword(currentPassword: string, newPassword: string) {
-    return this.request("/settings/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword }) });
+    return this.request("/settings/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
   }
-  async getVacation() { return this.request("/settings/vacation"); }
-  async saveVacation(payload: { isActive: boolean; subject: string; body: string; startDate?: string; endDate?: string }) {
-    return this.request("/settings/vacation", { method: "PUT", body: JSON.stringify(payload) });
+  async getVacation() {
+    return this.request("/settings/vacation");
+  }
+  async saveVacation(payload: {
+    isActive: boolean;
+    subject: string;
+    body: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    return this.request("/settings/vacation", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
   }
 
   async getProfile() {
@@ -507,15 +531,32 @@ class ApiClient {
     );
   }
 
-  async createAdminAlias(sourceAddress: string, destinationEmail: string, _domainId: string) {
-    const results = await this.request(`/admin/mailboxes?search=${encodeURIComponent(destinationEmail)}&pageSize=100`);
-    const mailbox = results.data.find((entry: { email: string }) => entry.email.toLowerCase() === destinationEmail.toLowerCase());
-    if (!mailbox) throw new Error("Destination must be an active hosted mailbox.");
-    return this.request("/admin/aliases", { method: "POST", body: JSON.stringify({ sourceAddress, destinationMailboxId: mailbox.id }) });
+  async createAdminAlias(
+    sourceAddress: string,
+    destinationEmail: string,
+    _domainId: string,
+  ) {
+    const results = await this.request(
+      `/admin/mailboxes?search=${encodeURIComponent(destinationEmail)}&pageSize=100`,
+    );
+    const mailbox = results.data.find(
+      (entry: { email: string }) =>
+        entry.email.toLowerCase() === destinationEmail.toLowerCase(),
+    );
+    if (!mailbox)
+      throw new Error("Destination must be an active hosted mailbox.");
+    return this.request("/admin/aliases", {
+      method: "POST",
+      body: JSON.stringify({ sourceAddress, destinationMailboxId: mailbox.id }),
+    });
   }
 
   async deleteAdminAlias(id: string) {
     return this.request(`/admin/aliases/${id}`, { method: "DELETE" });
+  }
+
+  async retryAdminJob(id: string) {
+    return this.request(`/admin/jobs/${id}/retry`, { method: "POST" });
   }
 
   async listAdminJobs(page = 1, pageSize = 50, status?: string) {

@@ -197,22 +197,47 @@ export default function MailboxApp() {
   };
   useEffect(() => {
     if (!user) return;
-    const events = new EventSource("/api/mail/events", { withCredentials: true });
-    events.onmessage = (event) => {
-      try {
-        if (
-          ["new_mail", "flags_updated", "expunge"].includes(
-            JSON.parse(event.data).type,
+    let events: EventSource;
+    let stopped = false;
+    let reconnectTimer: ReturnType<typeof setTimeout>;
+    let delay = 1000;
+    const connect = () => {
+      events = new EventSource("/api/mail/events", { withCredentials: true });
+      events.onmessage = (event) => {
+        try {
+          if (
+            ["new_mail", "flags_updated", "expunge"].includes(
+              JSON.parse(event.data).type,
+            )
           )
-        )
-          refresh.current();
-      } catch {
-        /* Ignore keep-alives. */
-      }
+            refresh.current();
+        } catch {
+          /* Ignore keep-alives. */
+        }
+      };
+      events.onopen = () => {
+        delay = 1000;
+      };
+      events.onerror = () => {
+        events.close();
+        if (stopped) return;
+        reconnectTimer = setTimeout(() => {
+          void api
+            .getMe()
+            .then(() => {
+              if (!stopped) connect();
+            })
+            .catch(() => {});
+        }, delay);
+        delay = Math.min(delay * 2, 30000);
+      };
     };
+    connect();
     const reconnect = () => refresh.current();
     window.addEventListener("online", reconnect);
     return () => {
+      stopped = true;
+      clearTimeout(reconnectTimer);
       events.close();
       window.removeEventListener("online", reconnect);
     };
@@ -634,8 +659,8 @@ export default function MailboxApp() {
           initialCc={composeInitial.cc}
           initialBcc={composeInitial.bcc}
           existingDraftUid={composeInitial.draftUid}
-          onSent={() => {
-            setNotice({ text: "Your message has been sent." });
+          onSent={(sentCopySaved) => {
+            setNotice({ text: sentCopySaved ? "Your message has been sent." : "Message sent, but the copy could not be saved in Sent. Do not resend it." });
             refresh.current();
           }}
         />

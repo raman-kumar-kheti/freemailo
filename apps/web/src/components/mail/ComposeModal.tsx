@@ -36,7 +36,7 @@ interface ComposeModalProps {
   initialCc?: string;
   initialBcc?: string;
   existingDraftUid?: number;
-  onSent?: () => void;
+  onSent?: (sentCopySaved: boolean) => void;
 }
 const splitAddresses = (value: string) =>
   value
@@ -259,7 +259,7 @@ export function ComposeModal({
     setSending(true);
     try {
       await saveQueue.current.catch(() => {});
-      await api.sendMail({
+      const result = await api.sendMail({
         to: splitAddresses(to),
         cc: splitAddresses(cc),
         bcc: splitAddresses(bcc),
@@ -273,7 +273,7 @@ export function ComposeModal({
         await api
           .deleteMessages("Drafts", [draftUid.current], true)
           .catch(() => {});
-      onSent?.();
+      onSent?.(result.sentCopySaved !== false);
       onClose();
     } catch (sendError) {
       setError(

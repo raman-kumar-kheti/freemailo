@@ -1,36 +1,43 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { History, RefreshCw, Filter } from 'lucide-react';
-import { api } from '@/lib/api';
+import React, { useState, useEffect, useCallback } from "react";
+import { History, RefreshCw, Filter } from "lucide-react";
+import { api } from "@/lib/api";
 
 export default function AuditAdminPage() {
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actionFilter, setActionFilter] = useState('');
+  const [actionFilter, setActionFilter] = useState("");
 
-  useEffect(() => {
-    loadLogs();
-  }, [actionFilter]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.listAdminAuditLogs(1, 100, actionFilter || undefined);
+      const res = await api.listAdminAuditLogs(
+        1,
+        100,
+        actionFilter || undefined,
+      );
       setLogs(res.data || (Array.isArray(res) ? res : []));
-    } catch (_) {}
-    finally {
+    } catch (_) {
+    } finally {
       setLoading(false);
     }
-  };
+  }, [actionFilter]);
+
+  useEffect(() => {
+    void loadLogs();
+  }, [loadLogs]);
 
   return (
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">System Audit Trail</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            System Audit Trail
+          </h1>
           <p className="text-xs text-zinc-400 mt-1">
-            Immutable log of all administrative actions, domain updates, and mailbox modifications
+            Immutable log of all administrative actions, domain updates, and
+            mailbox modifications
           </p>
         </div>
         <button
@@ -76,33 +83,47 @@ export default function AuditAdminPage() {
           <tbody className="divide-y divide-zinc-800/60 text-zinc-200 font-mono text-[11px]">
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-zinc-500 font-sans">
+                <td
+                  colSpan={6}
+                  className="py-8 text-center text-zinc-500 font-sans"
+                >
                   Loading audit logs...
                 </td>
               </tr>
             ) : logs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-zinc-500 font-sans">
+                <td
+                  colSpan={6}
+                  className="py-8 text-center text-zinc-500 font-sans"
+                >
                   No audit logs recorded
                 </td>
               </tr>
             ) : (
               logs.map((log) => (
-                <tr key={log.id} className="hover:bg-zinc-800/40 transition-colors">
+                <tr
+                  key={log.id}
+                  className="hover:bg-zinc-800/40 transition-colors"
+                >
                   <td className="py-3 px-4">
                     <span className="px-2 py-0.5 rounded bg-zinc-800 text-indigo-400 font-semibold">
                       {log.action}
                     </span>
                   </td>
                   <td className="py-3 px-4 text-zinc-300 font-sans">
-                    {log.entity} <span className="text-zinc-500 text-[10px] font-mono">({log.entityId})</span>
+                    {log.resourceType}{" "}
+                    <span className="text-zinc-500 text-[10px] font-mono">
+                      ({log.resourceId})
+                    </span>
                   </td>
                   <td className="py-3 px-4 text-zinc-300 font-sans">
-                    {log.user?.email || 'admin@mailhive.local'}
+                    {`${log.actorType}: ${log.actorId}`}
                   </td>
-                  <td className="py-3 px-4 text-zinc-500">{log.ipAddress || '127.0.0.1'}</td>
+                  <td className="py-3 px-4 text-zinc-500">
+                    {log.ipAddress || "—"}
+                  </td>
                   <td className="py-3 px-4 text-zinc-400 max-w-xs truncate">
-                    {log.metadata ? JSON.stringify(log.metadata) : '-'}
+                    {log.details ? JSON.stringify(log.details) : "-"}
                   </td>
                   <td className="py-3 px-4 text-zinc-500 font-sans">
                     {new Date(log.createdAt).toLocaleString()}

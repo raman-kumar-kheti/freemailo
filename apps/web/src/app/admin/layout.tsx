@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
-import Link from 'next/navigation';
-import { usePathname, useRouter } from 'next/navigation';
+import React, { useEffect, useState } from "react";
+import Link from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Globe,
@@ -13,43 +13,55 @@ import {
   LogOut,
   ExternalLink,
   ShieldCheck,
-} from 'lucide-react';
-import { api } from '@/lib/api';
+} from "lucide-react";
+import { api } from "@/lib/api";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<any>(null);
 
   useEffect(() => {
-    if (pathname === '/admin/login') return;
+    if (pathname === "/admin/login") return;
 
     let active = true;
-    api.getMe().then(({ user }) => {
-      if (!active) return;
-      if (!["ADMIN", "SUPER_ADMIN"].includes(user.role)) router.replace('/admin/login');
-      else setAdminUser(user);
-    }).catch(() => { if (active) router.replace('/admin/login'); });
-    return () => { active = false; };
+    api
+      .getMe()
+      .then(({ user }) => {
+        if (!active) return;
+        if (!["ADMIN", "SUPER_ADMIN"].includes(user.role))
+          router.replace("/admin/login");
+        else setAdminUser(user);
+      })
+      .catch(() => {
+        if (active) router.replace("/admin/login");
+      });
+    return () => {
+      active = false;
+    };
   }, [pathname, router]);
 
   // If on login page, render full screen without dashboard shell
-  if (pathname === '/admin/login') {
+  if (pathname === "/admin/login") {
     return <>{children}</>;
   }
 
   const handleLogout = async () => {
     await api.logout();
-    router.push('/admin/login');
+    router.push("/admin/login");
   };
 
   const navItems = [
-    { href: '/admin', label: 'Overview', icon: LayoutDashboard },
-    { href: '/admin/domains', label: 'Domains & DNS', icon: Globe },
-    { href: '/admin/mailboxes', label: 'Mailboxes & Quota', icon: Mail },
-    { href: '/admin/aliases', label: 'Aliases & Forwarding', icon: Forward },
-    { href: '/admin/jobs', label: 'Provisioning Queue', icon: Cpu },
-    { href: '/admin/audit', label: 'Audit Trail', icon: History },
+    { href: "/admin", label: "Overview", icon: LayoutDashboard },
+    { href: "/admin/domains", label: "Domains & DNS", icon: Globe },
+    { href: "/admin/mailboxes", label: "Mailboxes & Quota", icon: Mail },
+    { href: "/admin/aliases", label: "Aliases & Forwarding", icon: Forward },
+    { href: "/admin/jobs", label: "Provisioning Queue", icon: Cpu },
+    { href: "/admin/audit", label: "Audit Trail", icon: History },
   ];
 
   return (
@@ -63,7 +75,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <span className="font-bold text-sm tracking-tight text-white block">MailHive</span>
+              <span className="font-bold text-sm tracking-tight text-white block">
+                MailHive
+              </span>
               <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block">
                 Admin Console
               </span>
@@ -81,8 +95,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   onClick={() => router.push(item.href)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     isActive
-                      ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
-                      : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                      ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm"
+                      : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -96,7 +110,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Footer actions */}
         <div className="space-y-2 pt-4 border-t border-zinc-800/80">
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
             className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:bg-zinc-800/60 hover:text-white transition-colors"
           >
             <span className="flex items-center gap-2">
@@ -120,7 +134,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 flex flex-col overflow-y-auto">
         <header className="h-16 border-b border-zinc-800 bg-zinc-900/40 px-8 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span className="font-semibold text-zinc-200">MailHive Cluster:</span>
+            <span className="font-semibold text-zinc-200">
+              MailHive Cluster:
+            </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/20">
               HEALTHY • 100% POSTFIX/DOVECOT
             </span>
@@ -128,7 +144,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-3">
             <div className="text-right">
               <span className="text-xs font-semibold text-zinc-200 block">
-                {adminUser?.email || 'admin@mailhive.local'}
+                {adminUser?.email || "admin@mailhive.local"}
               </span>
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
                 Super Admin

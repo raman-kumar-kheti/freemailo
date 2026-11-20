@@ -5,6 +5,7 @@
 # General
 smtpd_banner = $myhostname ESMTP MailHive
 biff = no
+disable_vrfy_command = yes
 append_dot_mydomain = no
 readme_directory = no
 compatibility_level = 3.6
@@ -48,6 +49,7 @@ smtp_tls_protocols = >=TLSv1.2
 smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
 
 # SASL Authentication via Dovecot
+smtpd_sender_login_maps = pgsql:/etc/postfix/pgsql-virtual-senders.cf
 smtpd_sasl_type = dovecot
 smtpd_sasl_path = inet:dovecot:12345
 smtpd_sasl_auth_enable = no

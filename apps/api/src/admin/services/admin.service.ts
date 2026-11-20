@@ -4,17 +4,17 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
-} from '@nestjs/common';
-import * as dns from 'dns';
-import { promisify } from 'util';
-import { PrismaService } from '../../prisma/prisma.service';
-import { AuthService } from '../../auth/auth.service';
-import { ProvisioningService } from '../../provisioning/provisioning.service';
-import { CreateDomainDto } from '../dto/create-domain.dto';
-import { CreateMailboxDto } from '../dto/create-mailbox.dto';
-import { UpdateMailboxDto } from '../dto/update-mailbox.dto';
-import { CreateAliasDto } from '../dto/create-alias.dto';
-import { ProvisionJobType, ActorType } from '@prisma/client';
+} from "@nestjs/common";
+import * as dns from "dns";
+import { promisify } from "util";
+import { PrismaService } from "../../prisma/prisma.service";
+import { AuthService } from "../../auth/auth.service";
+import { ProvisioningService } from "../../provisioning/provisioning.service";
+import { CreateDomainDto } from "../dto/create-domain.dto";
+import { CreateMailboxDto } from "../dto/create-mailbox.dto";
+import { UpdateMailboxDto } from "../dto/update-mailbox.dto";
+import { CreateAliasDto } from "../dto/create-alias.dto";
+import { ProvisionJobType, ActorType } from "@prisma/client";
 
 const resolveMx = promisify(dns.resolveMx);
 const resolveTxt = promisify(dns.resolveTxt);
@@ -47,7 +47,7 @@ export class AdminService {
       data: {
         name: domainName,
         isActive: true,
-        dkimSelector: 'mailhive',
+        dkimSelector: "mailhive",
       },
     });
 
@@ -55,12 +55,19 @@ export class AdminService {
     await this.provisioning.enqueueJob(ProvisionJobType.CREATE_DOMAIN, {
       domainId: domain.id,
       domainName: domain.name,
-      selector: 'mailhive',
+      selector: "mailhive",
     });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'domain.create', 'Domain', domain.id, {
-      name: domain.name,
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "domain.create",
+      "Domain",
+      domain.id,
+      {
+        name: domain.name,
+      },
+    );
 
     return domain;
   }
@@ -83,7 +90,7 @@ export class AdminService {
             select: { mailboxes: { where: { deletedAt: null } } },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.domain.count({ where }),
     ]);
@@ -112,7 +119,7 @@ export class AdminService {
       },
     });
     if (!domain) {
-      throw new NotFoundException('Domain not found');
+      throw new NotFoundException("Domain not found");
     }
     return domain;
   }
@@ -125,52 +132,62 @@ export class AdminService {
       data: { deletedAt: new Date(), isActive: false },
     });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'domain.delete', 'Domain', id, {
-      name: domain.name,
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "domain.delete",
+      "Domain",
+      id,
+      {
+        name: domain.name,
+      },
+    );
 
     return { success: true };
   }
 
   async getDomainDnsRecords(id: string) {
     const domain = await this.getDomain(id);
-    const mailHost = process.env.MAIL_HOSTNAME || 'mail.example.test';
-    const selector = domain.dkimSelector || 'mailhive';
+    const mailHost = process.env.MAIL_HOSTNAME || "mail.example.test";
+    const selector = domain.dkimSelector || "mailhive";
 
     return {
       domain: domain.name,
       records: {
         mx: {
-          type: 'MX',
+          type: "MX",
           host: domain.name,
           value: mailHost,
           priority: 10,
           verified: domain.mxVerified,
         },
         spf: {
-          type: 'TXT',
+          type: "TXT",
           host: domain.name,
           value: `v=spf1 mx ~all`,
           verified: domain.spfVerified,
         },
         dkim: {
-          type: 'TXT',
+          type: "TXT",
           host: `${selector}._domainkey.${domain.name}`,
-          value: domain.dkimPublicKey ? `v=DKIM1; k=rsa; p=${domain.dkimPublicKey}` : null,
+          value: domain.dkimPublicKey
+            ? `v=DKIM1; k=rsa; p=${domain.dkimPublicKey}`
+            : null,
           verified: domain.dkimVerified,
         },
         dmarc: {
-          type: 'TXT',
+          type: "TXT",
           host: `_dmarc.${domain.name}`,
           value: `v=DMARC1; p=quarantine; rua=mailto:postmaster@${domain.name}`,
           verified: domain.dmarcVerified,
         },
         ptr: {
-          description: 'Reverse DNS (rDNS) pointing to your mail server hostname',
+          description:
+            "Reverse DNS (rDNS) pointing to your mail server hostname",
           recommendedValue: mailHost,
         },
         mtaSts: {
-          description: 'MTA Strict Transport Security',
+          description: "MTA Strict Transport Security",
           policyHost: `mta-sts.${domain.name}`,
           txtRecord: `v=STSv1; id=2026112001`,
         },
@@ -189,8 +206,12 @@ export class AdminService {
     // Verify MX
     try {
       const records = await resolveMx(domain.name);
-      const expectedHost = process.env.MAIL_HOSTNAME || 'mail.example.test';
-      mxVerified = records.some((r) => r.exchange.toLowerCase().replace(/\.$/, '') === expectedHost.toLowerCase().replace(/\.$/, ''));
+      const expectedHost = process.env.MAIL_HOSTNAME || "mail.example.test";
+      mxVerified = records.some(
+        (r) =>
+          r.exchange.toLowerCase().replace(/\.$/, "") ===
+          expectedHost.toLowerCase().replace(/\.$/, ""),
+      );
     } catch (e) {
       mxVerified = false;
     }
@@ -198,18 +219,28 @@ export class AdminService {
     // Verify SPF
     try {
       const txtRecords = await resolveTxt(domain.name);
-      const records = txtRecords.map((parts) => parts.join('')).filter((record) => /^v=spf1\s/i.test(record));
-      spfVerified = records.length === 1 && /(?:^|\s)mx(?:\s|$)/i.test(records[0]) && /(?:^|\s)[~-]all(?:\s|$)/i.test(records[0]);
+      const records = txtRecords
+        .map((parts) => parts.join(""))
+        .filter((record) => /^v=spf1\s/i.test(record));
+      spfVerified =
+        records.length === 1 &&
+        /(?:^|\s)mx(?:\s|$)/i.test(records[0]) &&
+        /(?:^|\s)[~-]all(?:\s|$)/i.test(records[0]);
     } catch (e) {
       spfVerified = false;
     }
 
     // Verify DKIM
     try {
-      const selector = domain.dkimSelector || 'mailhive';
+      const selector = domain.dkimSelector || "mailhive";
       const dkimTxt = await resolveTxt(`${selector}._domainkey.${domain.name}`);
-      const records = dkimTxt.map((parts) => parts.join(''));
-      dkimVerified = records.length === 1 && /(?:^|;)\s*v=DKIM1(?:;|$)/i.test(records[0]) && !!domain.dkimPublicKey && records[0].match(/(?:^|;)\s*p=([^;]*)/)?.[1].replace(/\s/g, '') === domain.dkimPublicKey;
+      const records = dkimTxt.map((parts) => parts.join(""));
+      dkimVerified =
+        records.length === 1 &&
+        /(?:^|;)\s*v=DKIM1(?:;|$)/i.test(records[0]) &&
+        !!domain.dkimPublicKey &&
+        records[0].match(/(?:^|;)\s*p=([^;]*)/)?.[1].replace(/\s/g, "") ===
+          domain.dkimPublicKey;
     } catch (e) {
       dkimVerified = false;
     }
@@ -217,13 +248,18 @@ export class AdminService {
     // Verify DMARC
     try {
       const dmarcTxt = await resolveTxt(`_dmarc.${domain.name}`);
-      const records = dmarcTxt.map((parts) => parts.join('')).filter((record) => /^v=DMARC1;/i.test(record));
-      dmarcVerified = records.length === 1 && /(?:^|;)\s*p=(none|quarantine|reject)(?:;|$)/i.test(records[0]);
+      const records = dmarcTxt
+        .map((parts) => parts.join(""))
+        .filter((record) => /^v=DMARC1;/i.test(record));
+      dmarcVerified =
+        records.length === 1 &&
+        /(?:^|;)\s*p=(none|quarantine|reject)(?:;|$)/i.test(records[0]);
     } catch (e) {
       dmarcVerified = false;
     }
 
-    const isVerified = mxVerified && spfVerified && dkimVerified && dmarcVerified;
+    const isVerified =
+      mxVerified && spfVerified && dkimVerified && dmarcVerified;
 
     const updated = await this.prisma.domain.update({
       where: { id },
@@ -248,7 +284,7 @@ export class AdminService {
       where: { id: dto.domainId, deletedAt: null, isActive: true },
     });
     if (!domain) {
-      throw new NotFoundException('Domain not found');
+      throw new NotFoundException("Domain not found");
     }
 
     const localPart = dto.localPart.toLowerCase().trim();
@@ -278,7 +314,15 @@ export class AdminService {
     });
 
     // Create system labels for the mailbox
-    const defaultLabels = ['Inbox', 'Starred', 'Sent', 'Drafts', 'Spam', 'Trash', 'All Mail'];
+    const defaultLabels = [
+      "Inbox",
+      "Starred",
+      "Sent",
+      "Drafts",
+      "Spam",
+      "Trash",
+      "All Mail",
+    ];
     await Promise.all(
       defaultLabels.map((name) =>
         this.prisma.label.create({
@@ -292,17 +336,27 @@ export class AdminService {
     );
 
     // Enqueue BullMQ job to create Maildir with vmail:vmail permissions
-    const jobRecord = await this.provisioning.enqueueJob(ProvisionJobType.CREATE_MAILBOX, {
-      mailboxId: mailbox.id,
-      email: mailbox.email,
-      domain: domain.name,
-      localPart: mailbox.localPart,
-    });
+    const jobRecord = await this.provisioning.enqueueJob(
+      ProvisionJobType.CREATE_MAILBOX,
+      {
+        mailboxId: mailbox.id,
+        email: mailbox.email,
+        domain: domain.name,
+        localPart: mailbox.localPart,
+      },
+    );
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'mailbox.create', 'Mailbox', mailbox.id, {
-      email: mailbox.email,
-      domain: domain.name,
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "mailbox.create",
+      "Mailbox",
+      mailbox.id,
+      {
+        email: mailbox.email,
+        domain: domain.name,
+      },
+    );
 
     return {
       mailbox: {
@@ -319,7 +373,12 @@ export class AdminService {
     };
   }
 
-  async listMailboxes(page = 1, pageSize = 50, domainId?: string, search?: string) {
+  async listMailboxes(
+    page = 1,
+    pageSize = 50,
+    domainId?: string,
+    search?: string,
+  ) {
     const skip = (page - 1) * pageSize;
     const where: any = { deletedAt: null };
 
@@ -329,7 +388,7 @@ export class AdminService {
     if (search) {
       where.OR = [
         { email: { contains: search.toLowerCase() } },
-        { displayName: { contains: search, mode: 'insensitive' } },
+        { displayName: { contains: search, mode: "insensitive" } },
       ];
     }
 
@@ -339,7 +398,7 @@ export class AdminService {
         skip,
         take: pageSize,
         include: { domain: { select: { name: true } } },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.mailbox.count({ where }),
     ]);
@@ -379,7 +438,7 @@ export class AdminService {
       include: { domain: true },
     });
     if (!mailbox) {
-      throw new NotFoundException('Mailbox not found');
+      throw new NotFoundException("Mailbox not found");
     }
     return {
       ...mailbox,
@@ -396,11 +455,11 @@ export class AdminService {
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
     if (dto.quotaBytes !== undefined) {
       updateData.quotaBytes = BigInt(dto.quotaBytes);
-
     }
     if (dto.password) {
-      updateData.passwordHash = await this.authService.hashPassword(dto.password);
-
+      updateData.passwordHash = await this.authService.hashPassword(
+        dto.password,
+      );
     }
 
     const updated = await this.prisma.mailbox.update({
@@ -408,15 +467,32 @@ export class AdminService {
       data: updateData,
     });
 
-    if (dto.quotaBytes !== undefined) await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_QUOTA, { mailboxId: id, quotaBytes: dto.quotaBytes });
+    if (dto.quotaBytes !== undefined)
+      await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_QUOTA, {
+        mailboxId: id,
+        quotaBytes: dto.quotaBytes,
+      });
     if (dto.password || dto.isActive === false) {
-      await this.prisma.refreshToken.updateMany({ where: { mailboxId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      await this.prisma.refreshToken.updateMany({
+        where: { mailboxId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     }
-    if (dto.password) await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_PASSWORD, { mailboxId: id });
+    if (dto.password)
+      await this.provisioning.enqueueJob(ProvisionJobType.UPDATE_PASSWORD, {
+        mailboxId: id,
+      });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'mailbox.update', 'Mailbox', id, {
-      changes: Object.keys(updateData),
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "mailbox.update",
+      "Mailbox",
+      id,
+      {
+        changes: Object.keys(updateData),
+      },
+    );
 
     return {
       ...updated,
@@ -439,9 +515,16 @@ export class AdminService {
       localPart: mailbox.localPart,
     });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'mailbox.delete', 'Mailbox', id, {
-      email: mailbox.email,
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "mailbox.delete",
+      "Mailbox",
+      id,
+      {
+        email: mailbox.email,
+      },
+    );
 
     return { success: true };
   }
@@ -456,13 +539,25 @@ export class AdminService {
       include: { domain: true },
     });
     if (!mailbox) {
-      throw new NotFoundException('Destination mailbox not found');
+      throw new NotFoundException("Destination mailbox not found");
     }
 
     const sourceAddress = dto.sourceAddress.toLowerCase().trim();
-    const sourceDomain = await this.prisma.domain.findFirst({ where: { name: sourceAddress.split('@')[1], isActive: true, deletedAt: null } });
-    if (!sourceDomain) throw new BadRequestException('Alias source domain must be hosted and active');
-    if (await this.prisma.mailbox.findUnique({ where: { email: sourceAddress } })) throw new ConflictException('Alias conflicts with a mailbox');
+    const sourceDomain = await this.prisma.domain.findFirst({
+      where: {
+        name: sourceAddress.split("@")[1],
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+    if (!sourceDomain)
+      throw new BadRequestException(
+        "Alias source domain must be hosted and active",
+      );
+    if (
+      await this.prisma.mailbox.findUnique({ where: { email: sourceAddress } })
+    )
+      throw new ConflictException("Alias conflicts with a mailbox");
     const existing = await this.prisma.alias.findUnique({
       where: { sourceAddress },
     });
@@ -480,10 +575,17 @@ export class AdminService {
       include: { destinationMailbox: { select: { id: true, email: true } } },
     });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'alias.create', 'Alias', alias.id, {
-      source: alias.sourceAddress,
-      destination: mailbox.email,
-    });
+    await this.logAudit(
+      ActorType.ADMIN,
+      adminId,
+      "alias.create",
+      "Alias",
+      alias.id,
+      {
+        source: alias.sourceAddress,
+        destination: mailbox.email,
+      },
+    );
 
     return alias;
   }
@@ -498,7 +600,7 @@ export class AdminService {
         skip,
         take: pageSize,
         include: { destinationMailbox: true, domain: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.alias.count({ where }),
     ]);
@@ -526,12 +628,12 @@ export class AdminService {
   async deleteAlias(id: string, adminId: string) {
     const alias = await this.prisma.alias.findUnique({ where: { id } });
     if (!alias) {
-      throw new NotFoundException('Alias not found');
+      throw new NotFoundException("Alias not found");
     }
 
     await this.prisma.alias.delete({ where: { id } });
 
-    await this.logAudit(ActorType.ADMIN, adminId, 'alias.delete', 'Alias', id, {
+    await this.logAudit(ActorType.ADMIN, adminId, "alias.delete", "Alias", id, {
       source: alias.sourceAddress,
     });
 
@@ -551,7 +653,7 @@ export class AdminService {
         where,
         skip,
         take: pageSize,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
       }),
       this.prisma.auditLog.count({ where }),
     ]);

@@ -1,6 +1,6 @@
 // Bootstrap only an explicit production admin; never reset an existing account.
-const { PrismaClient } = require('../apps/api/node_modules/@prisma/client');
-const argon2 = require('../apps/api/node_modules/argon2');
+const { PrismaClient } = require(require.resolve('@prisma/client', { paths: [require('path').resolve(__dirname, '../apps/api'), require('path').resolve(__dirname, '..')] }));
+const argon2 = require(require.resolve('argon2', { paths: [require('path').resolve(__dirname, '../apps/api'), require('path').resolve(__dirname, '..')] }));
 const prisma = new PrismaClient();
 async function main() {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();

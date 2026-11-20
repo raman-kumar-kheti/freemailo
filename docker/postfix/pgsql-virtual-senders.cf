@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailhive
+password = POSTGRES_PASSWORD_PLACEHOLDER
+dbname = mailhive
+query = SELECT m.email FROM mailboxes m JOIN domains d ON m."domainId"=d.id WHERE m.email='%s' AND m."isActive"=true AND m."deletedAt" IS NULL AND d."isActive"=true AND d."deletedAt" IS NULL UNION SELECT m.email FROM aliases a JOIN mailboxes m ON a."destinationMailboxId"=m.id JOIN domains d ON a."domainId"=d.id WHERE a."sourceAddress"='%s' AND a."isActive"=true AND m."isActive"=true AND m."deletedAt" IS NULL AND d."isActive"=true AND d."deletedAt" IS NULL

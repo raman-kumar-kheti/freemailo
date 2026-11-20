@@ -1,14 +1,20 @@
-import { IsOptional, IsString, IsBoolean, IsNumber, MinLength } from 'class-validator';
-import { Min, Max, IsInt } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsNumber,
+  MinLength,
+} from "class-validator";
+import { Min, Max, IsInt } from "class-validator";
+import { ApiProperty } from "@nestjs/swagger";
 
 export class UpdateMailboxDto {
-  @ApiProperty({ example: 'Johnathan Doe', required: false })
+  @ApiProperty({ example: "Johnathan Doe", required: false })
   @IsString()
   @IsOptional()
   displayName?: string;
 
-  @ApiProperty({ example: 'NewSecret123!', required: false })
+  @ApiProperty({ example: "NewSecret123!", required: false })
   @IsString()
   @IsOptional()
   @MinLength(8)

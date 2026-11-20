@@ -1,9 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-import { Request } from 'express';
-import { PrismaService } from '../../prisma/prisma.service';
+import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { PassportStrategy } from "@nestjs/passport";
+import { ExtractJwt, Strategy } from "passport-jwt";
+import { ConfigService } from "@nestjs/config";
+import { Request } from "express";
+import { PrismaService } from "../../prisma/prisma.service";
 
 export interface JwtPayload {
   sub: string;
@@ -25,13 +25,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         (req: Request) => {
           let token = null;
           if (req && req.cookies) {
-            token = req.cookies['access_token'];
+            token = req.cookies["access_token"];
           }
           return token;
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
+      secretOrKey: configService.getOrThrow<string>("JWT_SECRET"),
     });
   }
 
@@ -41,7 +41,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         where: { id: payload.sub },
       });
       if (!admin) {
-        throw new UnauthorizedException('Admin account not found or disabled');
+        throw new UnauthorizedException("Admin account not found or disabled");
       }
       return {
         id: admin.id,
@@ -56,15 +56,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         where: { id: payload.sub },
         include: { domain: true },
       });
-      if (!mailbox || !mailbox.isActive || mailbox.deletedAt || !mailbox.domain.isActive || mailbox.domain.deletedAt) {
-        throw new UnauthorizedException('Mailbox account inactive or not found');
+      if (
+        !mailbox ||
+        !mailbox.isActive ||
+        mailbox.deletedAt ||
+        !mailbox.domain.isActive ||
+        mailbox.domain.deletedAt
+      ) {
+        throw new UnauthorizedException(
+          "Mailbox account inactive or not found",
+        );
       }
       return {
         id: mailbox.id,
         email: mailbox.email,
         displayName: mailbox.displayName,
         domainId: mailbox.domainId,
-        role: 'MAILBOX',
+        role: "MAILBOX",
         isAdmin: false,
         isMailbox: true,
       };

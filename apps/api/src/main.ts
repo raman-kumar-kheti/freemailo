@@ -1,16 +1,18 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import helmet from 'helmet';
-import * as cookieParser from 'cookie-parser';
-import { ApiExceptionFilter } from './common/api-exception.filter';
-import { ResponseInterceptor } from './common/response.interceptor';
-import { csrfProtection } from './common/security';
-import { AppModule } from './app.module';
+import { NestFactory } from "@nestjs/core";
+import { ValidationPipe, Logger, ConsoleLogger } from "@nestjs/common";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import helmet from "helmet";
+import * as cookieParser from "cookie-parser";
+import { ApiExceptionFilter } from "./common/api-exception.filter";
+import { ResponseInterceptor } from "./common/response.interceptor";
+import { csrfProtection } from "./common/security";
+import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const logger = new Logger("Bootstrap");
+  const app = await NestFactory.create(AppModule, {
+    logger: new ConsoleLogger({ json: true }),
+  });
 
   // Security Headers
   app.use(helmet());
@@ -34,31 +36,33 @@ async function bootstrap() {
 
   // CORS
   app.enableCors({
-    origin: (process.env.APP_URL || 'http://localhost:3000').split(','),
+    origin: (process.env.APP_URL || "http://localhost:3000").split(","),
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   });
 
   // OpenAPI / Swagger Documentation
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('MailHive API')
-    .setDescription('Production-ready self-hosted email platform API')
-    .setVersion('1.0.0')
+    .setTitle("MailHive API")
+    .setDescription("Production-ready self-hosted email platform API")
+    .setVersion("1.0.0")
     .addBearerAuth()
-    .addTag('Auth')
-    .addTag('Admin')
-    .addTag('Mail')
-    .addTag('Settings')
+    .addTag("Auth")
+    .addTag("Admin")
+    .addTag("Mail")
+    .addTag("Settings")
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup("api/docs", app, document);
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
   logger.log(`🚀 MailHive API listening on port ${port}`);
-  logger.log(`📖 Swagger API docs available at http://localhost:${port}/api/docs`);
+  logger.log(
+    `📖 Swagger API docs available at http://localhost:${port}/api/docs`,
+  );
 }
 
 bootstrap();

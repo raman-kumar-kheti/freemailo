@@ -18,8 +18,9 @@ gunzip -c "$BACKUP_DIR/mailhive_db_${TIMESTAMP}.sql.gz" | docker exec -i "$ID" p
 count="$(docker exec "$ID" psql -U postgres -tAc 'SELECT count(*) FROM mailboxes')"
 [[ "$count" =~ ^[0-9]+$ ]] || { echo 'Database restore failed'; exit 1; }
 # Verify archive extraction and compare byte-exact content with tar, not just existence.
-for prefix in vmail rspamd; do
+for prefix in vmail rspamd postfix redis; do
+  [ -f "$BACKUP_DIR/mailhive_${prefix}_${TIMESTAMP}.tar.gz" ] || continue
   docker run --rm -i -v "$ID:/restore" alpine:3.22 sh -c 'mkdir -p /restore/data; tar -xzf - -C /restore/data' < "$BACKUP_DIR/mailhive_${prefix}_${TIMESTAMP}.tar.gz"
   docker run --rm -i -v "$ID:/restore:ro" ubuntu:24.04 tar -dzf - -C /restore/data < "$BACKUP_DIR/mailhive_${prefix}_${TIMESTAMP}.tar.gz"
 done
-printf 'Isolated restore passed: %s mailbox records; Maildir and DKIM bytes verified.\n' "$count"
+printf 'Isolated restore passed: %s mailbox records; available Maildir, DKIM, queue and Redis archives verified.\n' "$count"

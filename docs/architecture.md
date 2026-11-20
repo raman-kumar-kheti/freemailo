@@ -1,5 +1,7 @@
 # MailHive — Architecture Document
 
+> Implementation update: see [application-review.md](application-review.md) for verified behavior. The API now uses HTTP-only browser cookies, direct shared-volume provisioning without a Docker socket, server-side IMAP SORT, and ManageSieve vacation deployment.
+
 ## 1. System Overview
 
 MailHive is a self-hosted, multi-domain email hosting platform that combines a full production mail stack (Postfix, Dovecot, Rspamd) with a Gmail-style webmail UI built on Next.js and NestJS. All virtual domains and users are managed in PostgreSQL via Prisma. The browser never speaks IMAP directly — the NestJS backend proxies all mail operations. Everything runs in Docker Compose with separate production and development configurations.

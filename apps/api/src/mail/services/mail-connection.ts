@@ -1,35 +1,44 @@
-import { ImapFlow } from 'imapflow';
-import { ConnectionOptions } from 'tls';
+import { ImapFlow } from "imapflow";
+import { ConnectionOptions } from "tls";
 
 export function mailTlsOptions(): ConnectionOptions {
   return {
-    minVersion: 'TLSv1.2',
-    rejectUnauthorized: process.env.MAIL_TLS_REJECT_UNAUTHORIZED !== 'false',
-    ...(process.env.MAIL_TLS_SERVERNAME ? { servername: process.env.MAIL_TLS_SERVERNAME } : {}),
+    minVersion: "TLSv1.2",
+    rejectUnauthorized: process.env.MAIL_TLS_REJECT_UNAUTHORIZED !== "false",
+    ...(process.env.MAIL_TLS_SERVERNAME
+      ? { servername: process.env.MAIL_TLS_SERVERNAME }
+      : {}),
   };
 }
 
 export function masterAuth(email: string) {
   const password = process.env.DOVECOT_MASTER_PASSWORD;
-  if (!password) throw new Error('DOVECOT_MASTER_PASSWORD must be configured');
-  return { user: `${email}*${process.env.DOVECOT_MASTER_USER || 'mailhive_master'}`, pass: password };
+  if (!password) throw new Error("DOVECOT_MASTER_PASSWORD must be configured");
+  return {
+    user: `${email}*${process.env.DOVECOT_MASTER_USER || "mailhive_master"}`,
+    pass: password,
+  };
 }
 
 export function createMailClient(email: string, password?: string): ImapFlow {
   const client = new ImapFlow({
-    host: process.env.DOVECOT_HOST || 'dovecot',
+    host: process.env.DOVECOT_HOST || "dovecot",
     port: Number(process.env.DOVECOT_IMAP_PORT || 993),
     secure: true,
-    auth: password === undefined ? masterAuth(email) : { user: email, pass: password },
+    auth:
+      password === undefined
+        ? masterAuth(email)
+        : { user: email, pass: password },
     tls: mailTlsOptions(),
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 60000,
+    maxIdleTime: 45000,
     logger: false,
   });
   // Network failures also arrive as events. Commands still reject, allowing the
   // HTTP boundary to report them without crashing the process.
-  client.on('error', () => {});
+  client.on("error", () => {});
   return client;
 }
 

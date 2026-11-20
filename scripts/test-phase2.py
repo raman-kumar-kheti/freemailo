@@ -103,7 +103,12 @@ def run_phase2_verification():
     # Check DNS records
     res = requests.get(f"{BASE_URL}/api/admin/domains/{new_domain['id']}/dns", headers=admin_headers)
     dns_records = res.json()["records"]
-    print(f"✅ DKIM Record: {dns_records['dkim']['host']} -> {dns_records['dkim']['value'][:50] if dns_records['dkim']['value'] else 'PENDING'}...")
+    for attempt in range(30):
+        if dns_records['dkim']['value']: break
+        time.sleep(1)
+        dns_records = requests.get(f"{BASE_URL}/api/admin/domains/{new_domain['id']}/dns", headers=admin_headers).json()['records']
+    assert dns_records['dkim']['value'], 'DKIM provisioning did not complete'
+    print('✅ DKIM public key generated and available for DNS')
 
     # -------------------------------------------------------------------------
     # TEST 7: Create Mailbox via API (Primary Acceptance Check)

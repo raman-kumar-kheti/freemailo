@@ -67,7 +67,7 @@ model Domain {
 
   // DKIM key material
   dkimSelector   String? /// e.g., "mailhive" or "20261120"
-  dkimPrivateKey String? /// PEM-encoded RSA private key (encrypted at rest)
+  dkimPrivateKey String? /// Legacy key field; new provisioning stores private keys only in the protected DKIM volume
   dkimPublicKey  String? /// For DNS TXT record display
 
   createdAt DateTime  @default(now())

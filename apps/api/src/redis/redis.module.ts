@@ -1,7 +1,7 @@
-import { Global, Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { BullModule } from '@nestjs/bullmq';
-import { RedisService } from './redis.service';
+import { Global, Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { BullModule } from "@nestjs/bullmq";
+import { RedisService } from "./redis.service";
 
 @Global()
 @Module({
@@ -11,9 +11,9 @@ import { RedisService } from './redis.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         connection: {
-          host: config.get<string>('REDIS_HOST', 'localhost'),
-          port: config.get<number>('REDIS_PORT', 6380),
-          password: config.get<string>('REDIS_PASSWORD'),
+          host: config.get<string>("REDIS_HOST", "localhost"),
+          port: config.get<number>("REDIS_PORT", 6380),
+          password: config.get<string>("REDIS_PASSWORD"),
           maxRetriesPerRequest: null,
         },
       }),
@@ -23,4 +23,4 @@ import { RedisService } from './redis.service';
   exports: [BullModule, RedisService],
 })
 export class RedisModule {}
-export { RedisService } from './redis.service';
+export { RedisService } from "./redis.service";
