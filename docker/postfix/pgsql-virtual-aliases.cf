@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailhive
+password = POSTGRES_PASSWORD_PLACEHOLDER
+dbname = mailhive
+query = SELECT m.email FROM aliases a JOIN mailboxes m ON a."destinationMailboxId" = m.id WHERE a."sourceAddress"='%s' AND a."isActive" = true

@@ -1,0 +1,24 @@
+{
+  "name": "mail-service",
+  "version": "1.0.0",
+  "description": "A production-ready, self-hosted multi-domain email hosting platform with a Gmail-style webmail UI.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@types/node": "^26.6.6",
+    "argon2": "^0.45.2",
+    "prisma": "^5.22.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

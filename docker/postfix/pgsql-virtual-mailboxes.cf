@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailhive
+password = POSTGRES_PASSWORD_PLACEHOLDER
+dbname = mailhive
+query = SELECT CONCAT(m."localPart", '/', 'Maildir/') FROM mailboxes m JOIN domains d ON m."domainId" = d.id WHERE m.email='%s' AND m."isActive" = true AND m."deletedAt" IS NULL AND d."deletedAt" IS NULL

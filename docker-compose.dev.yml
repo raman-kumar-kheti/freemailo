@@ -1,0 +1,88 @@
+###############################################################################
+# MailHive – Development Overrides
+# Usage:  docker compose -f docker-compose.yml -f docker-compose.dev.yml \
+#           --env-file .env.dev up -d
+###############################################################################
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL – expose to host for local tooling (pgAdmin, psql, etc.)
+  # ---------------------------------------------------------------------------
+  postgres:
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+    command: >
+      postgres
+        -c log_statement=all
+        -c log_connections=on
+        -c log_disconnections=on
+        -c log_min_duration_statement=0
+
+  # ---------------------------------------------------------------------------
+  # Redis – expose to host for redis-cli / RedisInsight
+  # ---------------------------------------------------------------------------
+  redis:
+    ports:
+      - "6380:6379"
+    command: >
+      redis-server
+        --requirepass ${REDIS_PASSWORD}
+        --appendonly yes
+        --maxmemory 256mb
+        --maxmemory-policy allkeys-lru
+        --loglevel verbose
+
+  # ---------------------------------------------------------------------------
+  # Postfix – mount config for live editing, verbose logging
+  # ---------------------------------------------------------------------------
+  postfix:
+    environment:
+      POSTFIX_LOG_LEVEL: verbose
+      MESSAGE_SIZE_LIMIT: ${MESSAGE_SIZE_LIMIT:-26214400}
+    volumes:
+      - ./docker/postfix/config:/etc/postfix/custom:ro
+      - vmail:/var/vmail
+      - ./certs:/etc/ssl/mail:ro
+
+  # ---------------------------------------------------------------------------
+  # Dovecot – expose LMTP, mount config for live editing, debug logging
+  # ---------------------------------------------------------------------------
+  dovecot:
+    ports:
+      - "993:993"
+      - "4190:4190"
+      - "24:24"
+    environment:
+      DOVECOT_LOG_LEVEL: debug
+    volumes:
+      - ./docker/dovecot/config:/etc/dovecot/custom:ro
+      - vmail:/var/vmail
+      - ./certs:/etc/ssl/mail:ro
+
+  # ---------------------------------------------------------------------------
+  # Rspamd – expose milter port, mount config for live editing, debug logging
+  # ---------------------------------------------------------------------------
+  rspamd:
+    ports:
+      - "11334:11334"
+      - "11332:11332"
+    environment:
+      RSPAMD_LOG_LEVEL: debug
+    volumes:
+      - ./docker/rspamd/config:/etc/rspamd/local.d/custom:ro
+      - rspamddata:/var/lib/rspamd
+
+  # ---------------------------------------------------------------------------
+  # Roundcube – verbose logging for dev
+  # ---------------------------------------------------------------------------
+  roundcube:
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://dovecot
+      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+      ROUNDCUBEMAIL_SMTP_SERVER: postfix
+      ROUNDCUBEMAIL_SMTP_PORT: "587"
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+      ROUNDCUBEMAIL_LOG_DRIVER: stdout

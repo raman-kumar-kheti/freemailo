@@ -1,0 +1,5 @@
+hosts = postgres
+user = mailhive
+password = POSTGRES_PASSWORD_PLACEHOLDER
+dbname = mailhive
+query = SELECT name FROM domains WHERE name='%s' AND "isActive" = true AND "deletedAt" IS NULL

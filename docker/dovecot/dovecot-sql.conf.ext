@@ -1,0 +1,11 @@
+# Dovecot SQL configuration for PostgreSQL
+driver = pgsql
+connect = host=postgres dbname=mailhive user=mailhive password=POSTGRES_PASSWORD_PLACEHOLDER
+
+default_pass_scheme = ARGON2ID
+
+password_query = SELECT email AS user, "passwordHash" AS password FROM mailboxes WHERE email='%u' AND "isActive" = true AND "deletedAt" IS NULL
+
+user_query = SELECT 5000 AS uid, 5000 AS gid, CONCAT('/var/vmail/', d.name, '/', m."localPart") AS home, CONCAT('maildir:/var/vmail/', d.name, '/', m."localPart", '/Maildir') AS mail, CONCAT('*:bytes=', m."quotaBytes") AS quota_rule FROM mailboxes m JOIN domains d ON m."domainId" = d.id WHERE m.email='%u' AND m."isActive" = true AND m."deletedAt" IS NULL
+
+iterate_query = SELECT email AS user FROM mailboxes WHERE "isActive" = true AND "deletedAt" IS NULL

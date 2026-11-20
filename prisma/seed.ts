@@ -7,13 +7,13 @@ async function main() {
   console.log('🌱 Seeding database...');
 
   // Create admin user
-  const adminPasswordHash = await argon2.hash('admin123456', {
+  const adminPasswordHash = `{ARGON2ID}${await argon2.hash('admin123456', {
     type: argon2.argon2id,
-  });
+  })}`;
 
   const admin = await prisma.adminUser.upsert({
     where: { email: 'admin@mailhive.local' },
-    update: {},
+    update: { passwordHash: adminPasswordHash },
     create: {
       email: 'admin@mailhive.local',
       passwordHash: adminPasswordHash,
@@ -41,16 +41,16 @@ async function main() {
   console.log(`  ✅ Domain: ${domain.name}`);
 
   // Create test mailboxes
-  const aliceHash = await argon2.hash('alice123456', {
+  const aliceHash = `{ARGON2ID}${await argon2.hash('alice123456', {
     type: argon2.argon2id,
-  });
-  const bobHash = await argon2.hash('bob123456', {
+  })}`;
+  const bobHash = `{ARGON2ID}${await argon2.hash('bob123456', {
     type: argon2.argon2id,
-  });
+  })}`;
 
   const alice = await prisma.mailbox.upsert({
     where: { email: 'alice@example.test' },
-    update: {},
+    update: { passwordHash: aliceHash },
     create: {
       localPart: 'alice',
       domainId: domain.id,
@@ -65,7 +65,7 @@ async function main() {
 
   const bob = await prisma.mailbox.upsert({
     where: { email: 'bob@example.test' },
-    update: {},
+    update: { passwordHash: bobHash },
     create: {
       localPart: 'bob',
       domainId: domain.id,
