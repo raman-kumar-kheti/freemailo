@@ -254,7 +254,7 @@ export class ImapService {
               isRead: flags.includes('\\Seen'),
               isStarred: flags.includes('\\Flagged'),
               hasAttachments,
-              labels: [],
+              labels: flags.filter((flag) => flag.startsWith('MailHive_')).map((flag) => flag.slice(9)),
               size: msg.size || 0,
             });
           }
@@ -668,6 +668,7 @@ export class ImapService {
             if (key === 'from') searchCriteria.from = val;
             else if (key === 'to') searchCriteria.to = val;
             else if (key === 'subject') searchCriteria.subject = val;
+            else if (key === 'label') searchCriteria.keyword = `MailHive_${val}`;
             else if (key === 'is') {
               if (val === 'unread') searchCriteria.unseen = true;
               else if (val === 'read') searchCriteria.seen = true;
@@ -728,7 +729,7 @@ export class ImapService {
               isRead: flags.includes('\\Seen'),
               isStarred: flags.includes('\\Flagged'),
               hasAttachments: this.checkHasAttachments(msg.bodyStructure),
-              labels: [],
+              labels: flags.filter((flag) => flag.startsWith('MailHive_')).map((flag) => flag.slice(9)),
               size: msg.size || 0,
             });
           }

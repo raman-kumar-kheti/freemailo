@@ -1,6 +1,6 @@
 // API Client for MailHive Webmail
 
-const API_BASE = '/api';
+const API_BASE = "/api";
 
 export interface User {
   id: string;
@@ -8,6 +8,13 @@ export interface User {
   domain: string;
   role: string;
   displayName?: string;
+}
+
+export interface Label {
+  id: string;
+  name: string;
+  color?: string;
+  isSystem?: boolean;
 }
 
 export interface Folder {
@@ -62,9 +69,9 @@ export interface MessageDetail {
   }>;
   headers: Record<string, string>;
   authResults: {
-    spf: 'pass' | 'fail' | 'softfail' | 'neutral' | 'none';
-    dkim: 'pass' | 'fail' | 'none';
-    dmarc: 'pass' | 'fail' | 'none';
+    spf: "pass" | "fail" | "softfail" | "neutral" | "none";
+    dkim: "pass" | "fail" | "none";
+    dmarc: "pass" | "fail" | "none";
   };
 }
 
@@ -72,16 +79,16 @@ class ApiClient {
   private token: string | null = null;
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('mailhive_token');
+    if (typeof window !== "undefined") {
+      this.token = localStorage.getItem("mailhive_token");
     }
   }
 
   setToken(token: string | null) {
     this.token = token;
-    if (typeof window !== 'undefined') {
-      if (token) localStorage.setItem('mailhive_token', token);
-      else localStorage.removeItem('mailhive_token');
+    if (typeof window !== "undefined") {
+      if (token) localStorage.setItem("mailhive_token", token);
+      else localStorage.removeItem("mailhive_token");
     }
   }
 
@@ -98,26 +105,31 @@ class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    if (this.token && !headers['Authorization']) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    if (this.token && !headers["Authorization"]) {
+      headers["Authorization"] = `Bearer ${this.token}`;
     }
 
-    if (!(options.body instanceof FormData) && !headers['Content-Type']) {
-      headers['Content-Type'] = 'application/json';
+    if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
     }
 
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers,
-      credentials: 'include', // sends refresh token cookie
+      credentials: "include", // sends refresh token cookie
     });
 
-    if (res.status === 401 && retry && path !== '/auth/login' && path !== '/auth/refresh') {
+    if (
+      res.status === 401 &&
+      retry &&
+      path !== "/auth/login" &&
+      path !== "/auth/refresh"
+    ) {
       // Try refresh token
       try {
         const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
+          method: "POST",
+          credentials: "include",
         });
         if (refreshRes.ok) {
           const data = await refreshRes.json();
@@ -126,10 +138,13 @@ class ApiClient {
         }
       } catch (_) {}
       this.setToken(null);
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith("/login")
+      ) {
+        window.location.href = "/login";
       }
-      throw new Error('Unauthorized');
+      throw new Error("Unauthorized");
     }
 
     if (!res.ok) {
@@ -150,8 +165,8 @@ class ApiClient {
 
   // --- Auth ---
   async login(email: string, password: string) {
-    const data = await this.request('/auth/login', {
-      method: 'POST',
+    const data = await this.request("/auth/login", {
+      method: "POST",
       body: JSON.stringify({ email, password }),
     });
     this.setToken(data.accessToken);
@@ -160,44 +175,54 @@ class ApiClient {
 
   async logout() {
     try {
-      await this.request('/auth/logout', { method: 'POST' });
+      await this.request("/auth/logout", { method: "POST" });
     } finally {
       this.setToken(null);
     }
   }
 
   async getMe(): Promise<{ user: User }> {
-    return this.request('/auth/me');
+    const response = await this.request<User | { user: User }>("/auth/me");
+    return { user: "user" in response ? response.user : response };
   }
 
   // --- Mail ---
   async getFolders(): Promise<{ folders: Folder[] }> {
-    return this.request('/mail/folders');
+    return this.request("/mail/folders");
   }
 
   async getMessages(
-    folder = 'INBOX',
+    folder = "INBOX",
     page = 1,
     pageSize = 50,
-    sort = 'date',
-    order = 'desc',
-  ): Promise<{ data: MessageListItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    sort = "date",
+    order = "desc",
+  ): Promise<{
+    data: MessageListItem[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }> {
     return this.request(
       `/mail/messages?folder=${encodeURIComponent(folder)}&page=${page}&pageSize=${pageSize}&sort=${sort}&order=${order}`,
     );
   }
 
-  async getMessage(uid: number, folder = 'INBOX'): Promise<MessageDetail> {
-    return this.request(`/mail/messages/${uid}?folder=${encodeURIComponent(folder)}`);
+  async getMessage(uid: number, folder = "INBOX"): Promise<MessageDetail> {
+    return this.request(
+      `/mail/messages/${uid}?folder=${encodeURIComponent(folder)}`,
+    );
   }
 
-  async getRawMessage(uid: number, folder = 'INBOX'): Promise<string> {
+  async getRawMessage(uid: number, folder = "INBOX"): Promise<string> {
     const res = await fetch(
       `${API_BASE}/mail/messages/${uid}/raw?folder=${encodeURIComponent(folder)}`,
       {
         headers: { Authorization: `Bearer ${this.token}` },
       },
     );
+    if (!res.ok) throw new Error("Could not load the original message.");
     return res.text();
   }
 
@@ -215,162 +240,213 @@ class ApiClient {
   }) {
     if (payload.attachments && payload.attachments.length > 0) {
       const formData = new FormData();
-      formData.append('to', JSON.stringify(payload.to));
-      if (payload.cc) formData.append('cc', JSON.stringify(payload.cc));
-      if (payload.bcc) formData.append('bcc', JSON.stringify(payload.bcc));
-      formData.append('subject', payload.subject);
-      if (payload.htmlBody) formData.append('htmlBody', payload.htmlBody);
-      if (payload.textBody) formData.append('textBody', payload.textBody);
-      if (payload.inReplyTo) formData.append('inReplyTo', payload.inReplyTo);
-      if (payload.signatureId) formData.append('signatureId', payload.signatureId);
-      payload.attachments.forEach((file) => formData.append('attachments', file));
+      formData.append("to", JSON.stringify(payload.to));
+      if (payload.cc) formData.append("cc", JSON.stringify(payload.cc));
+      if (payload.bcc) formData.append("bcc", JSON.stringify(payload.bcc));
+      formData.append("subject", payload.subject);
+      if (payload.htmlBody) formData.append("htmlBody", payload.htmlBody);
+      if (payload.textBody) formData.append("textBody", payload.textBody);
+      if (payload.inReplyTo) formData.append("inReplyTo", payload.inReplyTo);
+      if (payload.signatureId)
+        formData.append("signatureId", payload.signatureId);
+      payload.attachments.forEach((file) =>
+        formData.append("attachments", file),
+      );
 
-      return this.request('/mail/send', {
-        method: 'POST',
+      return this.request("/mail/send", {
+        method: "POST",
         body: formData,
       });
     }
 
-    return this.request('/mail/send', {
-      method: 'POST',
+    return this.request("/mail/send", {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   }
 
-  async saveDraft(payload: {
-    to?: string[];
-    cc?: string[];
-    bcc?: string[];
-    subject?: string;
-    htmlBody?: string;
-    textBody?: string;
-  }, existingUid?: number) {
+  async saveDraft(
+    payload: {
+      to?: string[];
+      cc?: string[];
+      bcc?: string[];
+      subject?: string;
+      htmlBody?: string;
+      textBody?: string;
+    },
+    existingUid?: number,
+  ) {
     if (existingUid) {
       return this.request(`/mail/draft/${existingUid}`, {
-        method: 'PUT',
+        method: "PUT",
         body: JSON.stringify(payload),
       });
     }
-    return this.request('/mail/draft', {
-      method: 'POST',
+    return this.request("/mail/draft", {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   }
 
-  async updateFlags(folder: string, uids: number[], flags: string[], action: 'add' | 'remove' | 'set') {
-    return this.request('/mail/messages/flags', {
-      method: 'PATCH',
+  async updateFlags(
+    folder: string,
+    uids: number[],
+    flags: string[],
+    action: "add" | "remove" | "set",
+  ) {
+    return this.request("/mail/messages/flags", {
+      method: "PATCH",
       body: JSON.stringify({ folder, uids, flags, action }),
     });
   }
 
-  async moveMessages(sourceFolder: string, destinationFolder: string, uids: number[]) {
-    return this.request('/mail/messages/move', {
-      method: 'POST',
+  async moveMessages(
+    sourceFolder: string,
+    destinationFolder: string,
+    uids: number[],
+  ) {
+    return this.request("/mail/messages/move", {
+      method: "POST",
       body: JSON.stringify({ sourceFolder, destinationFolder, uids }),
     });
   }
 
   async deleteMessages(folder: string, uids: number[], permanent = false) {
-    return this.request('/mail/messages', {
-      method: 'DELETE',
+    return this.request("/mail/messages", {
+      method: "DELETE",
       body: JSON.stringify({ folder, uids, permanent }),
     });
   }
 
-  async searchMessages(query: string, folder = 'INBOX', page = 1, pageSize = 50) {
+  async searchMessages(
+    query: string,
+    folder = "INBOX",
+    page = 1,
+    pageSize = 50,
+  ) {
     return this.request(
       `/mail/search?q=${encodeURIComponent(query)}&folder=${encodeURIComponent(folder)}&page=${page}&pageSize=${pageSize}`,
     );
   }
 
-  getAttachmentUrl(uid: number, partId: string, folder = 'INBOX'): string {
+  getAttachmentUrl(uid: number, partId: string, folder = "INBOX"): string {
     return `${API_BASE}/mail/attachments/${uid}/${encodeURIComponent(partId)}?folder=${encodeURIComponent(folder)}`;
   }
 
   // --- Settings ---
   async getProfile() {
-    return this.request('/settings/profile');
+    return this.request("/settings/profile");
   }
 
   async updateProfile(displayName: string) {
-    return this.request('/settings/profile', {
-      method: 'PUT',
+    return this.request("/settings/profile", {
+      method: "PUT",
       body: JSON.stringify({ displayName }),
     });
   }
 
   async getSignatures() {
-    return this.request('/settings/signatures');
+    return this.request("/settings/signatures");
   }
 
   async createSignature(name: string, body: string, isDefault = false) {
-    return this.request('/settings/signatures', {
-      method: 'POST',
+    return this.request("/settings/signatures", {
+      method: "POST",
       body: JSON.stringify({ name, body, isDefault }),
     });
   }
 
   async deleteSignature(id: string) {
-    return this.request(`/settings/signatures/${id}`, { method: 'DELETE' });
+    return this.request(`/settings/signatures/${id}`, { method: "DELETE" });
   }
 
   async getLabels() {
-    return this.request('/settings/labels');
+    return this.request("/settings/labels");
   }
 
   async createLabel(name: string, color?: string) {
-    return this.request('/settings/labels', {
-      method: 'POST',
+    return this.request("/settings/labels", {
+      method: "POST",
       body: JSON.stringify({ name, color }),
     });
   }
 
+  async updateLabel(id: string, name: string, color?: string) {
+    return this.request(`/settings/labels/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ name, color }),
+    });
+  }
+
+  async downloadAttachment(
+    uid: number,
+    partId: string,
+    folder: string,
+    filename: string,
+  ) {
+    const res = await fetch(this.getAttachmentUrl(uid, partId, folder), {
+      headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+      credentials: "include",
+    });
+    if (!res.ok)
+      throw new Error("Could not download the attachment. Please try again.");
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   async deleteLabel(id: string) {
-    return this.request(`/settings/labels/${id}`, { method: 'DELETE' });
+    return this.request(`/settings/labels/${id}`, { method: "DELETE" });
   }
 
   async getContacts(q?: string) {
-    return this.request(`/settings/contacts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+    return this.request(
+      `/settings/contacts${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    );
   }
 
   async getTrustedSenders() {
-    return this.request('/settings/trusted-senders');
+    return this.request("/settings/trusted-senders");
   }
 
   async addTrustedSender(email: string) {
-    return this.request('/settings/trusted-senders', {
-      method: 'POST',
+    return this.request("/settings/trusted-senders", {
+      method: "POST",
       body: JSON.stringify({ email }),
     });
   }
 
   // --- Admin APIs ---
   async adminLogin(email: string, password: string) {
-    const data = await this.request('/auth/admin/login', {
-      method: 'POST',
+    const data = await this.request("/auth/admin/login", {
+      method: "POST",
       body: JSON.stringify({ email, password }),
     });
     this.setToken(data.accessToken);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('mailhive_admin_user', JSON.stringify(data.user));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("mailhive_admin_user", JSON.stringify(data.user));
     }
     return data;
   }
 
   async listAdminDomains(page = 1, pageSize = 50, search?: string) {
-    return this.request(`/admin/domains?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
+    return this.request(
+      `/admin/domains?page=${page}&pageSize=${pageSize}${search ? `&search=${encodeURIComponent(search)}` : ""}`,
+    );
   }
 
   async createAdminDomain(name: string) {
-    return this.request('/admin/domains', {
-      method: 'POST',
+    return this.request("/admin/domains", {
+      method: "POST",
       body: JSON.stringify({ name }),
     });
   }
 
   async deleteAdminDomain(id: string) {
-    return this.request(`/admin/domains/${id}`, { method: 'DELETE' });
+    return this.request(`/admin/domains/${id}`, { method: "DELETE" });
   }
 
   async getDomainDns(id: string) {
@@ -378,52 +454,72 @@ class ApiClient {
   }
 
   async verifyDomainDns(id: string) {
-    return this.request(`/admin/domains/${id}/verify`, { method: 'POST' });
+    return this.request(`/admin/domains/${id}/verify`, { method: "POST" });
   }
 
   async listAdminMailboxes(domainId?: string, page = 1, pageSize = 50) {
-    return this.request(`/admin/mailboxes?page=${page}&pageSize=${pageSize}${domainId ? `&domainId=${domainId}` : ''}`);
+    return this.request(
+      `/admin/mailboxes?page=${page}&pageSize=${pageSize}${domainId ? `&domainId=${domainId}` : ""}`,
+    );
   }
 
-  async createAdminMailbox(payload: { email: string; password?: string; quotaBytes?: number; domainId?: string }) {
-    return this.request('/admin/mailboxes', {
-      method: 'POST',
+  async createAdminMailbox(payload: {
+    email: string;
+    password?: string;
+    quotaBytes?: number;
+    domainId?: string;
+  }) {
+    return this.request("/admin/mailboxes", {
+      method: "POST",
       body: JSON.stringify(payload),
     });
   }
 
-  async updateAdminMailbox(id: string, payload: { password?: string; quotaBytes?: number; isActive?: boolean }) {
+  async updateAdminMailbox(
+    id: string,
+    payload: { password?: string; quotaBytes?: number; isActive?: boolean },
+  ) {
     return this.request(`/admin/mailboxes/${id}`, {
-      method: 'PATCH',
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   }
 
   async deleteAdminMailbox(id: string) {
-    return this.request(`/admin/mailboxes/${id}`, { method: 'DELETE' });
+    return this.request(`/admin/mailboxes/${id}`, { method: "DELETE" });
   }
 
   async listAdminAliases(domainId?: string) {
-    return this.request(`/admin/aliases${domainId ? `?domainId=${domainId}` : ''}`);
+    return this.request(
+      `/admin/aliases${domainId ? `?domainId=${domainId}` : ""}`,
+    );
   }
 
-  async createAdminAlias(source: string, destination: string, domainId: string) {
-    return this.request('/admin/aliases', {
-      method: 'POST',
+  async createAdminAlias(
+    source: string,
+    destination: string,
+    domainId: string,
+  ) {
+    return this.request("/admin/aliases", {
+      method: "POST",
       body: JSON.stringify({ source, destination, domainId }),
     });
   }
 
   async deleteAdminAlias(id: string) {
-    return this.request(`/admin/aliases/${id}`, { method: 'DELETE' });
+    return this.request(`/admin/aliases/${id}`, { method: "DELETE" });
   }
 
   async listAdminJobs(page = 1, pageSize = 50, status?: string) {
-    return this.request(`/admin/jobs?page=${page}&pageSize=${pageSize}${status ? `&status=${status}` : ''}`);
+    return this.request(
+      `/admin/jobs?page=${page}&pageSize=${pageSize}${status ? `&status=${status}` : ""}`,
+    );
   }
 
   async listAdminAuditLogs(page = 1, pageSize = 50, action?: string) {
-    return this.request(`/admin/audit-log?page=${page}&pageSize=${pageSize}${action ? `&action=${action}` : ''}`);
+    return this.request(
+      `/admin/audit-log?page=${page}&pageSize=${pageSize}${action ? `&action=${action}` : ""}`,
+    );
   }
 }
 

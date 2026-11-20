@@ -1,43 +1,43 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
-import { api } from '@/lib/api';
-import { useRouter } from 'next/navigation';
+import React, { useState } from "react";
+import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
+import { api } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      setError('Please enter both email and password.');
+      setError("Please enter both email and password.");
       return;
     }
 
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
       await api.login(email.trim(), password);
-      router.push('/');
+      router.push("/");
     } catch (err: any) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/30 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card border border-border shadow-2xl rounded-3xl p-8 space-y-6">
+    <main className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-card border border-border shadow-sm rounded-3xl p-8 sm:p-10 space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 mx-auto flex items-center justify-center text-white shadow-lg">
+          <div className="w-14 h-14 rounded-2xl bg-primary mx-auto flex items-center justify-center text-white shadow-lg">
             <Mail className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
@@ -49,20 +49,27 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium text-center animate-in fade-in">
+          <div
+            role="alert"
+            className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium text-center animate-in fade-in"
+          >
             {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+            <label
+              htmlFor="email"
+              className="block text-xs font-semibold text-muted-foreground mb-1.5"
+            >
               Email Address
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 id="email"
+                autoComplete="username"
                 type="email"
                 required
                 value={email}
@@ -74,13 +81,17 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+            <label
+              htmlFor="password"
+              className="block text-xs font-semibold text-muted-foreground mb-1.5"
+            >
               Password
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 id="password"
+                autoComplete="current-password"
                 type="password"
                 required
                 value={password}
@@ -114,6 +125,6 @@ export default function LoginPage() {
           <span>MailHive Self-Hosted Platform</span>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

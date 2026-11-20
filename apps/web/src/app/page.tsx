@@ -1,437 +1,692 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { Navbar } from '@/components/layout/Navbar';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { MessageList } from '@/components/mail/MessageList';
-import { ReadingPane } from '@/components/mail/ReadingPane';
-import { ComposeModal } from '@/components/mail/ComposeModal';
-import { ShortcutsModal } from '@/components/mail/ShortcutsModal';
-import { SettingsModal } from '@/components/mail/SettingsModal';
-import { api, User, Folder, MessageListItem, MessageDetail } from '@/lib/api';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { Navbar } from "@/components/layout/Navbar";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { MessageList } from "@/components/mail/MessageList";
+import { ReadingPane } from "@/components/mail/ReadingPane";
+import dynamic from "next/dynamic";
+const ComposeModal = dynamic(
+  () =>
+    import("@/components/mail/ComposeModal").then(
+      (module) => module.ComposeModal,
+    ),
+  { ssr: false },
+);
+import { ShortcutsModal } from "@/components/mail/ShortcutsModal";
+import { SettingsModal } from "@/components/mail/SettingsModal";
+import { IconButton, Modal } from "@/components/ui/mail-ui";
+import {
+  api,
+  User,
+  Folder,
+  Label,
+  MessageListItem,
+  MessageDetail,
+} from "@/lib/api";
+import { CheckCircle2, AlertCircle, Mail, WifiOff, X } from "lucide-react";
+
+type ComposeInitial = {
+  to?: string;
+  subject?: string;
+  inReplyTo?: string;
+  body?: string;
+  html?: string;
+  cc?: string;
+  bcc?: string;
+  draftUid?: number;
+};
+const errorText = (error: unknown) =>
+  error instanceof Error
+    ? error.message
+    : "Something went wrong. Please try again.";
 
 export default function MailboxApp() {
   const router = useRouter();
-
-  // User auth state
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
-
-  // Folder & message state
   const [folders, setFolders] = useState<Folder[]>([]);
-  const [labels, setLabels] = useState<any[]>([]);
-  const [currentFolder, setCurrentFolder] = useState<string>('INBOX');
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [currentFolder, setCurrentFolder] = useState("INBOX");
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [messages, setMessages] = useState<MessageListItem[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [selectedUids, setSelectedUids] = useState<number[]>([]);
-  const [activeMessage, setActiveMessage] = useState<MessageDetail | null>(null);
+  const [activeMessage, setActiveMessage] = useState<MessageDetail | null>(
+    null,
+  );
   const [loadingActiveMessage, setLoadingActiveMessage] = useState(false);
-
-  // Pagination state
   const [page, setPage] = useState(1);
-  const [pageSize] = useState(50);
+  const pageSize = 50;
   const [total, setTotal] = useState(0);
-
-  // Modals & UI controls
   const [composeOpen, setComposeOpen] = useState(false);
-  const [composeInitial, setComposeInitial] = useState<{ to?: string; subject?: string; inReplyTo?: string }>({});
+  const [composeInitial, setComposeInitial] = useState<ComposeInitial>({});
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"profile" | "labels">(
+    "profile",
+  );
   const [rawModalContent, setRawModalContent] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [notice, setNotice] = useState<{
+    text: string;
+    error?: boolean;
+  } | null>(null);
+  const listRequest = useRef(0);
+  const messageRequest = useRef(0);
+  const lastMessageUid = useRef<number | null>(null);
+  const goKey = useRef(0);
+  const sourceFolder =
+    currentFolder.startsWith("search:") ||
+    currentFolder.startsWith("label:") ||
+    currentFolder === "STARRED"
+      ? "INBOX"
+      : currentFolder;
+  const query = currentFolder.startsWith("search:")
+    ? currentFolder.slice(7)
+    : "";
+  const title = currentFolder.startsWith("search:")
+    ? "Search results"
+    : currentFolder.startsWith("label:")
+      ? currentFolder.slice(6)
+      : currentFolder === "INBOX"
+        ? "Inbox"
+        : currentFolder === "STARRED"
+          ? "Starred"
+          : currentFolder === "Junk"
+            ? "Spam"
+            : folders.find((folder) => folder.path === currentFolder)?.name ||
+              currentFolder;
+  const notifyError = (error: unknown) =>
+    setNotice({ text: errorText(error), error: true });
 
-  // 1. Initial Auth Check
   useEffect(() => {
-    async function checkAuth() {
-      try {
-        const { user } = await api.getMe();
-        setUser(user);
-      } catch (_) {
-        router.push('/login');
-      } finally {
-        setAuthChecking(false);
-      }
-    }
-    checkAuth();
+    api
+      .getMe()
+      .then(({ user: me }) => setUser(me))
+      .catch(() => router.replace("/login"))
+      .finally(() => setAuthChecking(false));
+    const updateOnline = () => setOffline(!navigator.onLine);
+    updateOnline();
+    setCollapsed(localStorage.getItem("mailhive-sidebar") === "collapsed");
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    return () => {
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
   }, [router]);
+  useEffect(() => {
+    if (!notice || notice.error) return;
+    const timer = setTimeout(() => setNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
-  // 2. Load Folders & Labels
   const loadFoldersAndLabels = useCallback(async () => {
     try {
-      const [foldersRes, labelsRes] = await Promise.all([
+      const [folderResult, labelResult] = await Promise.all([
         api.getFolders(),
         api.getLabels(),
       ]);
-      setFolders(foldersRes.folders || []);
-      setLabels(labelsRes.labels || []);
-    } catch (_) {}
+      setFolders(folderResult.folders || []);
+      setLabels(labelResult.labels || []);
+    } catch (error) {
+      setNotice({
+        text: `Couldn’t refresh folders: ${errorText(error)}`,
+        error: true,
+      });
+    }
   }, []);
-
-  useEffect(() => {
-    if (user) {
-      loadFoldersAndLabels();
-    }
-  }, [user, loadFoldersAndLabels]);
-
-  // 3. Load Messages
-  const loadMessages = useCallback(async (folder = currentFolder, p = page) => {
+  const loadMessages = useCallback(async () => {
+    const request = ++listRequest.current;
     setLoadingMessages(true);
+    setLoadError("");
     try {
-      if (folder.startsWith('search:')) {
-        const query = folder.replace('search:', '');
-        const res = await api.searchMessages(query, 'INBOX', p, pageSize);
-        setMessages(res.data || []);
-        setTotal(res.total || 0);
-      } else if (folder === 'STARRED') {
-        const res = await api.searchMessages('is:starred', 'INBOX', p, pageSize);
-        setMessages(res.data || []);
-        setTotal(res.total || 0);
-      } else {
-        const res = await api.getMessages(folder, p, pageSize);
-        setMessages(res.data || []);
-        setTotal(res.total || 0);
-      }
-      setSelectedUids([]);
-    } catch (_) {
-      setMessages([]);
-      setTotal(0);
-    } finally {
-      setLoadingMessages(false);
-    }
-  }, [currentFolder, page, pageSize]);
-
-  useEffect(() => {
-    if (user) {
-      loadMessages(currentFolder, page);
-    }
-  }, [user, currentFolder, page, loadMessages]);
-
-  // 4. Realtime SSE Connection for IMAP IDLE updates
-  useEffect(() => {
-    if (!user) return;
-
-    let eventSource: EventSource | null = null;
-    try {
-      const token = api.getToken();
-      eventSource = new EventSource(`/api/mail/events${token ? `?token=${encodeURIComponent(token)}` : ''}`);
-
-      eventSource.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          if (payload.type === 'new_mail' || payload.type === 'flags_updated' || payload.type === 'expunge') {
-            loadFoldersAndLabels();
-            loadMessages();
-          }
-        } catch (_) {}
-      };
-    } catch (_) {}
-
-    return () => {
-      if (eventSource) eventSource.close();
-    };
-  }, [user, loadFoldersAndLabels, loadMessages]);
-
-  // 5. Global Keyboard Shortcuts Handler
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger shortcuts if focus is inside input/textarea
-      const target = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable) {
+      const labelQuery = query.replace(
+        /label:("[^"]*"|[^\s]+)/g,
+        (_, value: string) => {
+          const name = value.replace(/^"|"$/g, "");
+          return `label:${labels.find((label) => label.name.toLowerCase() === name.toLowerCase())?.id || "unknown"}`;
+        },
+      );
+      const terms = [
+        labelQuery,
+        currentFolder === "STARRED" ? "is:starred" : "",
+        currentFolder.startsWith("label:")
+          ? `label:${labels.find((label) => label.name === currentFolder.slice(6))?.id || "unknown"}`
+          : "",
+        unreadOnly ? "is:unread" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const result = terms
+        ? await api.searchMessages(terms, sourceFolder, page, pageSize)
+        : await api.getMessages(sourceFolder, page, pageSize);
+      if (request !== listRequest.current) return;
+      if (page > 1 && (result.total || 0) <= (page - 1) * pageSize) {
+        setPage(Math.max(1, Math.ceil(result.total / pageSize)));
         return;
       }
-
-      if (e.key === 'c' || e.key === 'C') {
-        e.preventDefault();
-        setComposeInitial({});
-        setComposeOpen(true);
-      } else if (e.key === '/') {
-        e.preventDefault();
-        const searchInput = document.getElementById('global-search-input');
-        if (searchInput) searchInput.focus();
-      } else if (e.key === '?') {
-        e.preventDefault();
-        setShortcutsOpen((prev) => !prev);
-      } else if (e.key === 'Escape') {
-        if (shortcutsOpen) setShortcutsOpen(false);
-        else if (settingsOpen) setSettingsOpen(false);
-        else if (rawModalContent) setRawModalContent(null);
-        else if (activeMessage) setActiveMessage(null);
-      } else if (e.key === 'e') {
-        // Archive
-        e.preventDefault();
-        if (activeMessage) {
-          handleArchive([activeMessage.uid]);
-        } else if (selectedUids.length > 0) {
-          handleArchive(selectedUids);
-        }
-      } else if (e.key === '#') {
-        // Delete
-        e.preventDefault();
-        if (activeMessage) {
-          handleDelete([activeMessage.uid]);
-        } else if (selectedUids.length > 0) {
-          handleDelete(selectedUids);
-        }
-      } else if (e.key === 's') {
-        // Star
-        e.preventDefault();
-        if (activeMessage) {
-          handleToggleStar(activeMessage.uid);
-        } else if (selectedUids.length > 0) {
-          handleToggleStar(selectedUids[0]);
-        }
+      setMessages(result.data || []);
+      setTotal(result.total || 0);
+      setSelectedUids([]);
+    } catch (error) {
+      if (request === listRequest.current) setLoadError(errorText(error));
+    } finally {
+      if (request === listRequest.current) setLoadingMessages(false);
+    }
+  }, [currentFolder, query, sourceFolder, page, unreadOnly, labels]);
+  useEffect(() => {
+    if (user) void loadFoldersAndLabels();
+  }, [user, loadFoldersAndLabels]);
+  useEffect(() => {
+    if (user) void loadMessages();
+    const requestCounter = listRequest;
+    return () => {
+      requestCounter.current++;
+    };
+  }, [user, loadMessages]);
+  const refresh = useRef(() => {});
+  refresh.current = () => {
+    void loadFoldersAndLabels();
+    void loadMessages();
+  };
+  useEffect(() => {
+    if (!user) return;
+    const token = api.getToken();
+    const events = new EventSource(
+      `/api/mail/events${token ? `?token=${encodeURIComponent(token)}` : ""}`,
+    );
+    events.onmessage = (event) => {
+      try {
+        if (
+          ["new_mail", "flags_updated", "expunge"].includes(
+            JSON.parse(event.data).type,
+          )
+        )
+          refresh.current();
+      } catch {
+        /* Ignore keep-alives. */
       }
     };
+    const reconnect = () => refresh.current();
+    window.addEventListener("online", reconnect);
+    return () => {
+      events.close();
+      window.removeEventListener("online", reconnect);
+    };
+  }, [user]);
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeMessage, selectedUids, shortcutsOpen, settingsOpen, rawModalContent]);
-
-  // Actions
+  const selectFolder = (folder: string) => {
+    ++messageRequest.current;
+    setLoadingActiveMessage(false);
+    setCurrentFolder(folder);
+    setActiveMessage(null);
+    setSelectedUids([]);
+    setPage(1);
+    setUnreadOnly(false);
+  };
+  const openCompose = (initial: ComposeInitial = {}) => {
+    if (!composeOpen) setComposeInitial(initial);
+    setComposeOpen(true);
+  };
+  const backToList = () => {
+    ++messageRequest.current;
+    setActiveMessage(null);
+    setLoadingActiveMessage(false);
+    requestAnimationFrame(() =>
+      document
+        .querySelector<HTMLButtonElement>(
+          `[data-message-open="${lastMessageUid.current}"]`,
+        )
+        ?.focus(),
+    );
+  };
   const handleSelectMessage = async (uid: number) => {
+    const request = ++messageRequest.current;
+    lastMessageUid.current = uid;
     setLoadingActiveMessage(true);
     try {
-      const msg = await api.getMessage(uid, currentFolder.startsWith('search:') ? 'INBOX' : currentFolder);
-      setActiveMessage(msg);
-      // Automatically mark as seen
-      if (!msg.isRead) {
-        api.updateFlags(currentFolder, [uid], ['\\Seen'], 'add').catch(() => {});
+      const message = await api.getMessage(uid, sourceFolder);
+      if (request !== messageRequest.current) return;
+      if (
+        sourceFolder ===
+        (folders.find((folder) => folder.specialUse === "\\Drafts")?.path ||
+          "Drafts")
+      ) {
+        openCompose({
+          to: message.to.map((recipient) => recipient.address).join(", "),
+          cc: message.cc.map((recipient) => recipient.address).join(", "),
+          bcc: message.bcc.map((recipient) => recipient.address).join(", "),
+          subject: message.subject,
+          body: message.textBody,
+          html: message.htmlBody,
+          draftUid: message.uid,
+          inReplyTo: message.headers["in-reply-to"],
+        });
+        return;
       }
-    } catch (err: any) {
-      alert(`Could not open message: ${err.message}`);
+      setActiveMessage(message);
+      if (!message.isRead) {
+        await api.updateFlags(sourceFolder, [uid], ["\\Seen"], "add");
+        setMessages((previous) =>
+          previous.map((item) =>
+            item.uid === uid ? { ...item, isRead: true } : item,
+          ),
+        );
+        void loadFoldersAndLabels();
+      }
+    } catch (error) {
+      if (request === messageRequest.current) notifyError(error);
     } finally {
-      setLoadingActiveMessage(false);
+      if (request === messageRequest.current) setLoadingActiveMessage(false);
     }
   };
-
-  const handleToggleStar = async (uid: number, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const target = messages.find((m) => m.uid === uid);
-    const newStarred = target ? !target.isStarred : true;
-
-    // Optimistic update
-    setMessages(
-      messages.map((m) => (m.uid === uid ? { ...m, isStarred: newStarred } : m)),
-    );
-    if (activeMessage && activeMessage.uid === uid) {
-      setActiveMessage({ ...activeMessage, isStarred: newStarred });
-    }
-
+  const handleToggleStar = async (uid: number) => {
+    const target = messages.find((item) => item.uid === uid) || activeMessage;
+    const starred = !target?.isStarred;
     try {
       await api.updateFlags(
-        currentFolder.startsWith('search:') ? 'INBOX' : currentFolder,
+        sourceFolder,
         [uid],
-        ['\\Flagged'],
-        newStarred ? 'add' : 'remove',
+        ["\\Flagged"],
+        starred ? "add" : "remove",
       );
-    } catch (_) {}
-  };
-
-  const handleArchive = async (uids: number[]) => {
-    try {
-      await api.moveMessages(
-        currentFolder.startsWith('search:') ? 'INBOX' : currentFolder,
-        'Archive',
-        uids,
+      setMessages((previous) =>
+        previous.map((item) =>
+          item.uid === uid ? { ...item, isStarred: starred } : item,
+        ),
       );
-      if (activeMessage && uids.includes(activeMessage.uid)) {
-        setActiveMessage(null);
-      }
-      loadMessages();
-      loadFoldersAndLabels();
-    } catch (err: any) {
-      alert(`Error archiving message: ${err.message}`);
+      setActiveMessage((previous) =>
+        previous?.uid === uid ? { ...previous, isStarred: starred } : previous,
+      );
+      if (currentFolder === "STARRED" && !starred) void loadMessages();
+    } catch (error) {
+      notifyError(error);
     }
   };
-
+  const handleMove = async (uids: number[], destination: string) => {
+    try {
+      await api.moveMessages(sourceFolder, destination, uids);
+      if (activeMessage && uids.includes(activeMessage.uid)) backToList();
+      setNotice({
+        text: `${uids.length === 1 ? "Message" : `${uids.length} messages`} moved to ${destination}.`,
+      });
+      refresh.current();
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+  const handleArchive = (uids: number[]) =>
+    handleMove(
+      uids,
+      folders.find((folder) => folder.specialUse === "\\Archive")?.path ||
+        "Archive",
+    );
   const handleDelete = async (uids: number[]) => {
     try {
-      await api.deleteMessages(
-        currentFolder.startsWith('search:') ? 'INBOX' : currentFolder,
-        uids,
-      );
-      if (activeMessage && uids.includes(activeMessage.uid)) {
-        setActiveMessage(null);
-      }
-      loadMessages();
-      loadFoldersAndLabels();
-    } catch (err: any) {
-      alert(`Error deleting message: ${err.message}`);
+      await api.deleteMessages(sourceFolder, uids);
+      if (activeMessage && uids.includes(activeMessage.uid)) backToList();
+      setNotice({
+        text: `${uids.length === 1 ? "Message" : `${uids.length} messages`} moved to Trash.`,
+      });
+      refresh.current();
+    } catch (error) {
+      notifyError(error);
     }
   };
-
   const handleMarkRead = async (uids: number[], isRead: boolean) => {
     try {
       await api.updateFlags(
-        currentFolder.startsWith('search:') ? 'INBOX' : currentFolder,
+        sourceFolder,
         uids,
-        ['\\Seen'],
-        isRead ? 'add' : 'remove',
+        ["\\Seen"],
+        isRead ? "add" : "remove",
       );
-      setMessages(
-        messages.map((m) => (uids.includes(m.uid) ? { ...m, isRead } : m)),
+      setMessages((previous) =>
+        previous.map((item) =>
+          uids.includes(item.uid) ? { ...item, isRead } : item,
+        ),
       );
-      loadFoldersAndLabels();
-    } catch (_) {}
-  };
-
-  const handleSearch = (query: string) => {
-    setActiveMessage(null);
-    setCurrentFolder(`search:${query}`);
-    setPage(1);
-  };
-
-  const handleShowRaw = async (uid: number) => {
-    try {
-      const raw = await api.getRawMessage(uid, currentFolder.startsWith('search:') ? 'INBOX' : currentFolder);
-      setRawModalContent(raw);
-    } catch (err: any) {
-      alert(`Error loading raw message: ${err.message}`);
+      if (unreadOnly) void loadMessages();
+      void loadFoldersAndLabels();
+    } catch (error) {
+      notifyError(error);
     }
   };
-
-  const handleLogout = async () => {
-    await api.logout();
-    router.push('/login');
+  const handleLabel = async (uids: number[], label: string) => {
+    try {
+      const labelId = labels.find((item) => item.name === label)?.id;
+      if (!labelId) throw new Error("This label is no longer available.");
+      const keyword = `MailHive_${labelId}`;
+      await api.updateFlags(sourceFolder, uids, [keyword], "add");
+      setNotice({ text: `Label “${label}” applied.` });
+      void loadMessages();
+    } catch (error) {
+      notifyError(error);
+    }
+  };
+  const reply = (mode: "reply" | "all" | "forward") => {
+    if (!activeMessage) return;
+    const sender = activeMessage.replyTo?.length
+      ? activeMessage.replyTo.map((item) => item.address)
+      : [activeMessage.from.address];
+    const recipients =
+      mode === "all"
+        ? Array.from(
+            new Set([
+              ...sender,
+              ...activeMessage.to.map((item) => item.address),
+              ...activeMessage.cc.map((item) => item.address),
+            ]),
+          ).filter((email) => email.toLowerCase() !== user?.email.toLowerCase())
+        : sender;
+    openCompose({
+      to: mode === "forward" ? "" : recipients.join(", "),
+      subject: `${mode === "forward" ? "Fwd" : "Re"}: ${activeMessage.subject.replace(/^(Re|Fwd):\s*/i, "")}`,
+      inReplyTo: mode === "forward" ? undefined : activeMessage.messageId,
+      body:
+        mode === "forward"
+          ? `\n\n---------- Forwarded message ----------\nFrom: ${activeMessage.from.address}\nDate: ${activeMessage.date}\nSubject: ${activeMessage.subject}\n\n${activeMessage.textBody}`
+          : "",
+    });
   };
 
-  if (authChecking) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+        target.isContentEditable ||
+        target.closest('[role="dialog"], [role="menu"]') ||
+        composeOpen ||
+        settingsOpen ||
+        shortcutsOpen ||
+        rawModalContent !== null
+      )
+        return;
+      const key = event.key.toLowerCase();
+      const uids = activeMessage ? [activeMessage.uid] : selectedUids;
+      if (key === "g") {
+        goKey.current = Date.now();
+        return;
+      }
+      if (key === "i" && Date.now() - goKey.current < 1200) {
+        event.preventDefault();
+        selectFolder("INBOX");
+        return;
+      }
+      if (key === "c") {
+        event.preventDefault();
+        openCompose();
+      } else if (key === "/") {
+        event.preventDefault();
+        document.getElementById("global-search-input")?.focus();
+      } else if (key === "?") {
+        event.preventDefault();
+        setShortcutsOpen(true);
+      } else if (key === "escape") backToList();
+      else if (key === "e" && uids.length) {
+        event.preventDefault();
+        void handleArchive(uids);
+      } else if (key === "#" && uids.length) {
+        event.preventDefault();
+        void handleDelete(uids);
+      } else if (key === "s" && uids.length) {
+        event.preventDefault();
+        void handleToggleStar(uids[0]);
+      } else if (["r", "a", "f"].includes(key) && activeMessage) {
+        event.preventDefault();
+        reply(key === "r" ? "reply" : key === "a" ? "all" : "forward");
+      } else if (key === "j" || key === "k") {
+        event.preventDefault();
+        const focusedUid = Number(
+          document.activeElement?.getAttribute("data-message-open"),
+        );
+        const index = messages.findIndex(
+          (message) => message.uid === (activeMessage?.uid || focusedUid),
+        );
+        const next =
+          messages[
+            Math.max(
+              0,
+              Math.min(messages.length - 1, index + (key === "j" ? 1 : -1)),
+            )
+          ];
+        if (next) {
+          if (activeMessage) void handleSelectMessage(next.uid);
+          else
+            document
+              .querySelector<HTMLButtonElement>(
+                `[data-message-open="${next.uid}"]`,
+              )
+              ?.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  });
 
+  if (authChecking || !user)
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-5">
+        <Mail className="text-primary" size={36} />
+        <p role="status" className="text-sm text-muted-foreground">
+          Opening your mailbox…
+        </p>
+      </main>
+    );
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Top Navbar */}
+    <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-card focus:p-3"
+      >
+        Skip to mail
+      </a>
       <Navbar
         user={user}
-        onSearch={handleSearch}
+        query={query}
+        sidebarExpanded={!collapsed || mobileOpen}
+        onToggleSidebar={() => {
+          if (matchMedia("(max-width: 767px)").matches) setMobileOpen(true);
+          else {
+            setCollapsed(!collapsed);
+            localStorage.setItem(
+              "mailhive-sidebar",
+              collapsed ? "expanded" : "collapsed",
+            );
+          }
+        }}
+        onSearch={(value) => selectFolder(value ? `search:${value}` : "INBOX")}
+        onOpenSettings={() => {
+          setSettingsTab("profile");
+          setSettingsOpen(true);
+        }}
         onOpenShortcuts={() => setShortcutsOpen(true)}
-        onLogout={handleLogout}
-      />
-
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar */}
-        <Sidebar
-          currentFolder={currentFolder}
-          onSelectFolder={(f) => {
-            setCurrentFolder(f);
-            setActiveMessage(null);
-            setPage(1);
-          }}
-          folders={folders}
-          labels={labels}
-          onOpenCompose={() => {
-            setComposeInitial({});
-            setComposeOpen(true);
-          }}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onCreateLabel={() => setSettingsOpen(true)}
-        />
-
-        {/* Main Content: MessageList or ReadingPane */}
-        {activeMessage ? (
-          <ReadingPane
-            message={activeMessage}
-            loading={loadingActiveMessage}
-            onBack={() => setActiveMessage(null)}
-            onArchive={(uid) => handleArchive([uid])}
-            onDelete={(uid) => handleDelete([uid])}
-            onMarkUnread={(uid) => {
-              handleMarkRead([uid], false);
-              setActiveMessage(null);
-            }}
-            onReply={(to, subject, inReplyTo) => {
-              setComposeInitial({ to, subject, inReplyTo });
-              setComposeOpen(true);
-            }}
-            onShowRaw={handleShowRaw}
-            onTrustSender={async (email) => {
-              await api.addTrustedSender(email);
-              alert(`Added ${email} to trusted senders list.`);
-            }}
-          />
-        ) : (
-          <MessageList
-            messages={messages}
-            loading={loadingMessages}
-            selectedUids={selectedUids}
-            onToggleSelect={(uid) => {
-              setSelectedUids((prev) =>
-                prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid],
-              );
-            }}
-            onSelectAll={(all) => {
-              setSelectedUids(all ? messages.map((m) => m.uid) : []);
-            }}
-            onSelectMessage={handleSelectMessage}
-            onToggleStar={handleToggleStar}
-            onArchive={handleArchive}
-            onDelete={handleDelete}
-            onMarkRead={handleMarkRead}
-            onRefresh={() => {
-              loadFoldersAndLabels();
-              loadMessages();
-            }}
-            page={page}
-            pageSize={pageSize}
-            total={total}
-            onPageChange={(p) => setPage(p)}
-          />
-        )}
-      </div>
-
-      {/* Floating Compose Window */}
-      <ComposeModal
-        isOpen={composeOpen}
-        onClose={() => setComposeOpen(false)}
-        initialTo={composeInitial.to}
-        initialSubject={composeInitial.subject}
-        initialInReplyTo={composeInitial.inReplyTo}
-        onSent={() => {
-          loadFoldersAndLabels();
-          loadMessages();
+        onLogout={async () => {
+          await api.logout();
+          router.push("/login");
         }}
       />
-
-      {/* Shortcuts Modal */}
+      {offline && (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-xs text-amber-950"
+        >
+          <WifiOff size={15} />
+          You’re offline. Reconnect to refresh your mail or send messages.
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 sm:pb-4 sm:pr-4">
+        <Sidebar
+          currentFolder={currentFolder}
+          onSelectFolder={selectFolder}
+          folders={folders}
+          labels={labels}
+          onOpenCompose={() => openCompose()}
+          onCreateLabel={() => {
+            setSettingsTab("labels");
+            setSettingsOpen(true);
+            setMobileOpen(false);
+          }}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
+          collapsed={collapsed}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex min-h-0 min-w-0 flex-1 md:pl-0 sm:pl-4"
+        >
+          {activeMessage || loadingActiveMessage ? (
+            <ReadingPane
+              message={activeMessage}
+              loading={loadingActiveMessage}
+              folder={sourceFolder}
+              onBack={backToList}
+              onArchive={(uid) => void handleArchive([uid])}
+              onDelete={(uid) => void handleDelete([uid])}
+              onMarkUnread={(uid) => {
+                void handleMarkRead([uid], false);
+                backToList();
+              }}
+              onReply={() => reply("reply")}
+              onReplyAll={() => reply("all")}
+              onForward={() => reply("forward")}
+              onToggleStar={handleToggleStar}
+              onShowRaw={async (uid) => {
+                try {
+                  setRawModalContent(
+                    await api.getRawMessage(uid, sourceFolder),
+                  );
+                } catch (error) {
+                  notifyError(error);
+                }
+              }}
+              onTrustSender={async (email) => {
+                await api.addTrustedSender(email);
+                setNotice({ text: `${email} added to trusted senders.` });
+              }}
+            />
+          ) : (
+            <MessageList
+              messages={messages}
+              loading={loadingMessages}
+              error={loadError}
+              title={title}
+              isSearch={!!query}
+              unreadOnly={unreadOnly}
+              onUnreadChange={(value) => {
+                setUnreadOnly(value);
+                setPage(1);
+              }}
+              folders={folders}
+              labels={labels}
+              selectedUids={selectedUids}
+              onToggleSelect={(uid) =>
+                setSelectedUids((previous) =>
+                  previous.includes(uid)
+                    ? previous.filter((id) => id !== uid)
+                    : [...previous, uid],
+                )
+              }
+              onSelectAll={(all) =>
+                setSelectedUids(
+                  all ? messages.map((message) => message.uid) : [],
+                )
+              }
+              onSelectMessage={handleSelectMessage}
+              onToggleStar={handleToggleStar}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+              onMarkRead={handleMarkRead}
+              onMove={handleMove}
+              onLabel={handleLabel}
+              onRefresh={() => refresh.current()}
+              onCompose={() => openCompose()}
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+            />
+          )}
+        </main>
+      </div>
+      {composeOpen && (
+        <ComposeModal
+          isOpen
+          onClose={() => {
+            setComposeOpen(false);
+            void loadFoldersAndLabels();
+          }}
+          initialTo={composeInitial.to}
+          initialSubject={composeInitial.subject}
+          initialInReplyTo={composeInitial.inReplyTo}
+          initialBody={composeInitial.body}
+          initialHtml={composeInitial.html}
+          initialCc={composeInitial.cc}
+          initialBcc={composeInitial.bcc}
+          existingDraftUid={composeInitial.draftUid}
+          onSent={() => {
+            setNotice({ text: "Your message has been sent." });
+            refresh.current();
+          }}
+        />
+      )}
       <ShortcutsModal
         isOpen={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
       />
-
-      {/* Settings Modal */}
       <SettingsModal
         isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
+        onClose={() => {
+          setSettingsOpen(false);
+          void loadFoldersAndLabels();
+        }}
         user={user}
         onProfileUpdated={() => {
-          api.getMe().then((res) => setUser(res.user));
-          loadFoldersAndLabels();
+          void api.getMe().then((result) => setUser(result.user));
+          void loadFoldersAndLabels();
         }}
       />
-
-      {/* Show Original (Raw Message Source) Modal */}
-      {rawModalContent && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
-          <div className="bg-popover border border-border rounded-2xl shadow-2xl max-w-3xl w-full h-[80vh] flex flex-col p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-3">
-              <h3 className="font-bold text-sm text-foreground">Raw RFC 5322 Message Source</h3>
-              <button
-                onClick={() => setRawModalContent(null)}
-                className="p-1 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <pre className="flex-1 overflow-auto p-4 rounded-xl bg-secondary/50 font-mono text-xs text-foreground select-all leading-relaxed whitespace-pre-wrap">
-              {rawModalContent}
-            </pre>
-          </div>
+      <Modal
+        open={rawModalContent !== null}
+        onClose={() => setRawModalContent(null)}
+        title="Original message"
+        className="max-w-3xl"
+      >
+        <pre className="overflow-auto whitespace-pre-wrap break-words p-6 font-mono text-xs leading-6">
+          {rawModalContent}
+        </pre>
+      </Modal>
+      {notice && (
+        <div
+          role={notice.error ? "alert" : "status"}
+          className="fixed bottom-5 left-1/2 z-[70] flex w-max max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-xl border bg-popover px-4 py-2 text-sm shadow-xl"
+        >
+          {notice.error ? (
+            <AlertCircle size={18} className="shrink-0 text-destructive" />
+          ) : (
+            <CheckCircle2 size={18} className="shrink-0 text-primary" />
+          )}
+          <span>{notice.text}</span>
+          <IconButton
+            label="Dismiss notification"
+            onClick={() => setNotice(null)}
+          >
+            <X size={16} />
+          </IconButton>
         </div>
       )}
     </div>
