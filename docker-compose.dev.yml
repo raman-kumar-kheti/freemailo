@@ -75,14 +75,3 @@ services:
       - ./docker/rspamd/config:/etc/rspamd/local.d/custom:ro
       - rspamddata:/var/lib/rspamd
 
-  # ---------------------------------------------------------------------------
-  # Roundcube – verbose logging for dev
-  # ---------------------------------------------------------------------------
-  roundcube:
-    environment:
-      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://dovecot
-      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
-      ROUNDCUBEMAIL_SMTP_SERVER: postfix
-      ROUNDCUBEMAIL_SMTP_PORT: "587"
-      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
-      ROUNDCUBEMAIL_LOG_DRIVER: stdout

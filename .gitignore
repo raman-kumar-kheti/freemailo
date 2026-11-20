@@ -12,3 +12,5 @@ coverage/
 /certs/
 test-results/
 playwright-report/
+backups/*
+!backups/.gitkeep

@@ -17,6 +17,7 @@ def print_step(title):
     print(f"\n--- {title} ---")
 
 def main():
+    run_id = int(time.time())
     print("==================================================================")
     print("                PHASE 3 - MAIL API ACCEPTANCE TESTS               ")
     print("==================================================================")
@@ -188,7 +189,7 @@ def main():
 
     # Labels CRUD
     res = session_alice.post(f"{API_BASE}/settings/labels", headers=headers_alice, json={
-        "name": "Personal Projects",
+        "name": f"Projects {run_id}",
         "color": "#10b981"
     })
     assert res.status_code == 201, "Create label failed"
@@ -197,7 +198,7 @@ def main():
 
     # Trusted Senders
     res = session_alice.post(f"{API_BASE}/settings/trusted-senders", headers=headers_alice, json={
-        "email": "newsletter@partner.test"
+        "email": f"newsletter-{run_id}@partner.test"
     })
     assert res.status_code == 201, "Add trusted sender failed"
     print(f"✅ Trusted sender added for automatic remote images")

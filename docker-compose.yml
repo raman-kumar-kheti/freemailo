@@ -192,30 +192,6 @@ services:
       - frontend
       - appnet
 
-  # ---------------------------------------------------------------------------
-  # Roundcube – webmail client
-  # ---------------------------------------------------------------------------
-  roundcube:
-    image: roundcube/roundcubemail:latest
-    container_name: mailhive-roundcube
-    ports:
-      - "8080:80"
-    environment:
-      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://dovecot
-      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
-      ROUNDCUBEMAIL_SMTP_SERVER: postfix
-      ROUNDCUBEMAIL_SMTP_PORT: "587"
-      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
-    volumes:
-      - ./docker/roundcube/custom.inc.php:/var/roundcube/config/custom.inc.php:ro
-    depends_on:
-      - dovecot
-      - postfix
-    restart: unless-stopped
-    networks:
-      - mailnet
-      - frontend
-
 # =============================================================================
 # Volumes
 # =============================================================================
