@@ -27,6 +27,7 @@ def main():
     check(alice.post(BASE + '/mail/send', headers={'Origin':'https://attacker.invalid'}, json={}), 403)
     check(requests.post(BASE + '/mail/send', cookies=alice.cookies, json={}), 403)
     check(alice.post(BASE + '/mail/send', json={'to': [], 'subject': 'Invalid'}), 400)
+    check(alice.post(BASE + '/mail/draft', json={'to': [{'address':'unexpected-object'}]}), 400)
     check(alice.post(BASE + '/mail/send', data={'to':'not-json', 'subject':'Invalid'}, files={'attachments':('a.txt',b'test')}), 400)
     check(alice.patch(BASE + '/mail/messages/flags', json={'folder':'INBOX','uids':[],'flags':['\\Seen'],'action':'add'}), 400)
     check(alice.get(BASE + '/mail/search', params={'q':'before:not-a-date'}), 400)

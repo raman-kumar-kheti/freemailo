@@ -97,7 +97,7 @@ export class HealthService {
     } catch (err: any) {
       services.postgres = {
         status: "down",
-        error: err.message,
+        error: "Database unavailable",
         latencyMs: Date.now() - pgStart,
       };
     }
@@ -113,7 +113,7 @@ export class HealthService {
     } catch (err: any) {
       services.redis = {
         status: "down",
-        error: err.message,
+        error: "Cache unavailable",
         latencyMs: Date.now() - redisStart,
       };
     }
@@ -136,13 +136,18 @@ export class HealthService {
       ...(dovecotResult.error && { error: dovecotResult.error }),
     };
 
-    const rspamd = await this.checkTcpService(
-      process.env.RSPAMD_HOST || "rspamd",
-      11332,
-    );
+    const rspamdStart = Date.now();
+    const rspamdUp = await fetch(
+      `http://${process.env.RSPAMD_HOST || "rspamd"}:11334/ping`,
+      {
+        signal: AbortSignal.timeout(2000),
+      },
+    )
+      .then((response) => response.ok)
+      .catch(() => false);
     services.rspamd = {
-      status: rspamd.ok ? "up" : "down",
-      latencyMs: rspamd.latencyMs,
+      status: rspamdUp ? "up" : "down",
+      latencyMs: Date.now() - rspamdStart,
     };
 
     const isHealthy = Object.values(services).every((s) => s.status === "up");

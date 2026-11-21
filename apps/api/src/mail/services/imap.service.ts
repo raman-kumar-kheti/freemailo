@@ -1,4 +1,5 @@
 import { sortedUids } from "./imap-sort";
+import { trustedAuthenticationResults } from "./authentication-results";
 import {
   Injectable,
   Logger,
@@ -387,9 +388,17 @@ export class ImapService {
               : String(val);
         });
 
-        // Parse Authentication-Results header
-        const authResults = this.parseAuthenticationResults(
-          headers["authentication-results"] || "",
+        // Rspamd replaces incoming results at the SMTP trust boundary. Keep
+        // individual headers separate and trust only our receiving hostname.
+        const authResults = trustedAuthenticationResults(
+          parsed.headerLines
+            .filter(
+              (header) => header.key.toLowerCase() === "authentication-results",
+            )
+            .map((header) =>
+              header.line.replace(/^authentication-results:\s*/i, ""),
+            ),
+          process.env.MAIL_HOSTNAME,
         );
 
         const fromAddr = parsed.from?.value?.[0] || { name: "", address: "" };
@@ -489,29 +498,6 @@ export class ImapService {
     } finally {
       await closeMailClient(client);
     }
-  }
-
-  /**
-   * Parse Authentication-Results header to determine SPF, DKIM, and DMARC status
-   */
-  private parseAuthenticationResults(header: string): AuthResultsDto {
-    const lower = header.toLowerCase();
-    let spf: AuthResultsDto["spf"] = "none";
-    let dkim: AuthResultsDto["dkim"] = "none";
-    let dmarc: AuthResultsDto["dmarc"] = "none";
-
-    if (lower.includes("spf=pass")) spf = "pass";
-    else if (lower.includes("spf=fail")) spf = "fail";
-    else if (lower.includes("spf=softfail")) spf = "softfail";
-    else if (lower.includes("spf=neutral")) spf = "neutral";
-
-    if (lower.includes("dkim=pass")) dkim = "pass";
-    else if (lower.includes("dkim=fail")) dkim = "fail";
-
-    if (lower.includes("dmarc=pass")) dmarc = "pass";
-    else if (lower.includes("dmarc=fail")) dmarc = "fail";
-
-    return { spf, dkim, dmarc };
   }
 
   /**

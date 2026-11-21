@@ -1,3 +1,4 @@
+import { readMaildirUsage } from "../../common/maildir-usage";
 import {
   Injectable,
   ConflictException,
@@ -404,25 +405,32 @@ export class AdminService {
     ]);
 
     return {
-      data: mailboxes.map((m) => {
-        const quota = Number(m.quotaBytes);
-        const used = Number(m.usedBytes);
-        const percent = quota > 0 ? Math.round((used / quota) * 100) : 0;
-        return {
-          id: m.id,
-          email: m.email,
-          localPart: m.localPart,
-          domainId: m.domainId,
-          domainName: m.domain.name,
-          displayName: m.displayName,
-          quotaBytes: quota,
-          usedBytes: used,
-          quotaPercent: percent,
-          isActive: m.isActive,
-          lastLoginAt: m.lastLoginAt,
-          createdAt: m.createdAt,
-        };
-      }),
+      data: await Promise.all(
+        mailboxes.map(async (m) => {
+          const quota = Number(m.quotaBytes);
+          const used = await readMaildirUsage(m.domain.name, m.localPart);
+          const percent =
+            used === null
+              ? null
+              : quota > 0
+                ? Math.round((used / quota) * 100)
+                : 0;
+          return {
+            id: m.id,
+            email: m.email,
+            localPart: m.localPart,
+            domainId: m.domainId,
+            domainName: m.domain.name,
+            displayName: m.displayName,
+            quotaBytes: quota,
+            usedBytes: used,
+            quotaPercent: percent,
+            isActive: m.isActive,
+            lastLoginAt: m.lastLoginAt,
+            createdAt: m.createdAt,
+          };
+        }),
+      ),
       meta: {
         page,
         pageSize,
@@ -443,7 +451,7 @@ export class AdminService {
     return {
       ...mailbox,
       quotaBytes: Number(mailbox.quotaBytes),
-      usedBytes: Number(mailbox.usedBytes),
+      usedBytes: await readMaildirUsage(mailbox.domain.name, mailbox.localPart),
     };
   }
 

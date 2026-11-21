@@ -218,9 +218,12 @@ export default function MailboxesAdminPage() {
                 const quotaMB = Math.round(
                   (Number(mb.quotaBytes) || 1073741824) / (1024 * 1024),
                 );
-                const usedMB = 12; // Telemetry usage approximation
+                const usedMB =
+                  mb.usedBytes == null
+                    ? null
+                    : Number(mb.usedBytes) / (1024 * 1024);
                 const percent = Math.min(
-                  Math.round((usedMB / quotaMB) * 100),
+                  Math.round(((usedMB || 0) / quotaMB) * 100),
                   100,
                 );
 
@@ -239,7 +242,11 @@ export default function MailboxesAdminPage() {
                     <td className="py-3.5 px-4">
                       <div className="w-48 space-y-1">
                         <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
-                          <span>{usedMB} MB</span>
+                          <span>
+                            {usedMB === null
+                              ? "Usage unavailable"
+                              : `${usedMB.toFixed(2)} MB`}
+                          </span>
                           <span>{quotaMB} MB</span>
                         </div>
                         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">

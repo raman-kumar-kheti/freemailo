@@ -7,6 +7,7 @@ import { ApiExceptionFilter } from "./common/api-exception.filter";
 import { ResponseInterceptor } from "./common/response.interceptor";
 import { csrfProtection } from "./common/security";
 import { AppModule } from "./app.module";
+import { HealthService } from "./health/health.service";
 
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
@@ -15,11 +16,33 @@ async function bootstrap() {
   });
 
   // Security Headers
+  // Trust only an operator-specified proxy/CIDR. Never trust client-provided
+  // forwarding headers by default when deciding authentication rate limits.
+  if (process.env.TRUST_PROXY) {
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .set(
+        "trust proxy",
+        process.env.TRUST_PROXY.split(",").map((value) => value.trim()),
+      );
+  }
   app.use(helmet());
 
   // Cookie Parser for JWT Refresh Token cookies
   app.use(cookieParser());
   app.use(csrfProtection);
+  const metrics = app.get(HealthService);
+  app.use((req, res, next) => {
+    res.once("finish", () =>
+      metrics.httpRequestsTotal.inc({
+        method: req.method,
+        path: req.route?.path || "unmatched",
+        status: String(res.statusCode),
+      }),
+    );
+    next();
+  });
   app.enableShutdownHooks();
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new ApiExceptionFilter());
@@ -45,9 +68,12 @@ async function bootstrap() {
   // OpenAPI / Swagger Documentation
   const swaggerConfig = new DocumentBuilder()
     .setTitle("MailHive API")
-    .setDescription("Production-ready self-hosted email platform API")
+    .setDescription(
+      "Self-hosted mail and administration API. Browser sessions use HttpOnly cookies; cookie-authenticated mutations require X-Requested-With: MailHive.",
+    )
     .setVersion("1.0.0")
     .addBearerAuth()
+    .addCookieAuth("access_token")
     .addTag("Auth")
     .addTag("Admin")
     .addTag("Mail")
