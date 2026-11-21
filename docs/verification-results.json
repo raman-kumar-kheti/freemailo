@@ -1,0 +1,82 @@
+{
+  "reviewDate": "2026-11-21",
+  "scope": "Existing single-host development deployment; revision across phases 0-7",
+  "productionCertified": false,
+  "unitTests": {
+    "passed": 37,
+    "suites": 9
+  },
+  "browserTests": {
+    "passed": 16,
+    "fixtureBacked": 8,
+    "liveStack": 8,
+    "seconds": 37.7
+  },
+  "lint": "passed",
+  "typecheck": "passed",
+  "dependencyAudits": {
+    "api": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "web": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "integrationChecks": [
+    "phase2-provisioning",
+    "phase3-mail-api",
+    "revision-auth-csrf-mime",
+    "open-relay",
+    "smtp-policy",
+    "authentication-header-boundary",
+    "vacation-delivery",
+    "spam-learning",
+    "spam-rejection",
+    "provisioned-domain-dkim-signature-present"
+  ],
+  "performance": {
+    "date": "2026-11-20",
+    "messages": 10000,
+    "listSamples": 20,
+    "p95Ms": 108,
+    "maxMs": 645,
+    "realtimeMs": 517,
+    "concurrentTenantCapacityTest": false
+  },
+  "lighthouse": {
+    "date": "2026-11-20",
+    "accessibilityScore": 100,
+    "source": "ui-review/lighthouse-summary.json",
+    "scope": "Populated test-only API fixtures on production Next.js build"
+  },
+  "restore": {
+    "format": 3,
+    "snapshot": "20261121_150541",
+    "mailboxRecords": 12,
+    "verified": [
+      "sql",
+      "maildir",
+      "rspamd-dkim",
+      "postfix-spool",
+      "redis"
+    ],
+    "isolated": true
+  },
+  "openapiPaths": 42,
+  "ci": {
+    "configured": true,
+    "remoteRunVerified": false,
+    "imagesPublished": false
+  },
+  "limitationsDocument": "application-review.md"
+}

@@ -1,155 +1,61 @@
-# MailHive Troubleshooting & Diagnostic Guide 🩺
+# Troubleshooting
 
-This guide provides systematic troubleshooting instructions for diagnosing and resolving common operational issues in Postfix, Dovecot, Rspamd, Redis, and Webmail.
+Start with the failed request's status and request ID, then the relevant daemon logs. Avoid printing secrets, tokens or full message bodies into shared diagnostics.
 
----
+## Health and logs
 
-## 🔍 Diagnostic Commands Quick Reference
-
-| Action | Command | Purpose |
-|--------|---------|---------|
-| **System Health** | `curl -s http://localhost:4000/api/health \| jq .` | Checks Postgres, Redis, Postfix, Dovecot status |
-| **Postfix Queue** | `docker exec mailhive-postfix postqueue -p` (or `mailq`) | Lists queued outbound messages |
-| **Flush Queue** | `docker exec mailhive-postfix postfix flush` | Attempts immediate delivery for all queued mail |
-| **Purge Queue** | `docker exec mailhive-postfix postsuper -d ALL` | Deletes all queued mail |
-| **Dovecot Auth Test** | `docker exec mailhive-dovecot doveadm auth test <email> <password>` | Verifies mailbox credentials |
-| **Dovecot Resync** | `docker exec mailhive-dovecot doveadm force-resync -u <email> INBOX` | Rebuilds corrupted mailbox indexes |
-| **Rspamd Stats** | `docker exec mailhive-rspamd rspamc stat` | Displays spam filtering throughput & scores |
-| **Rspamd Scan** | `docker exec -i mailhive-rspamd rspamc < /path/to/email.eml` | Runs full spam & DKIM checks on raw MIME email |
-| **Tail Postfix Logs** | `docker logs -f mailhive-postfix` | Inspects live SMTP transactions |
-| **Tail Dovecot Logs** | `docker logs -f mailhive-dovecot` | Inspects live IMAP/LMTP connections |
-
----
-
-## 🚨 Common Issues & Resolution
-
-### 1. Inbound Emails Not Arriving
-
-#### Symptoms
-- External senders receive bounced mail (`554 5.7.1 Relay access denied` or `Connection timed out`).
-- Mailbox INBOX remains empty.
-
-#### Diagnostic Steps
-1. Verify MX record resolution:
-   ```bash
-   dig MX yourdomain.com +short
-   ```
-   Ensure it points to `mail.yourdomain.com.`, not an IP address.
-2. Check if Postfix is listening on Port 25:
-   ```bash
-   nc -zv your-server-ip 25
-   ```
-3. Check Postfix container logs:
-   ```bash
-   docker logs --tail 100 mailhive-postfix | grep -i "reject"
-   ```
-4. If you see `Relay access denied`:
-   - Ensure the domain is added to PostgreSQL:
-     ```bash
-     docker exec -i mailhive-postgres psql -U mailhive -d mailhive -c "SELECT name, \"isActive\" FROM domains;"
-     ```
-   - Verify Postfix pgsql query:
-     ```bash
-     docker exec mailhive-postfix postmap -q "yourdomain.com" pgsql:/etc/postfix/pgsql-virtual-mailbox-domains.cf
-     ```
-     Should output `yourdomain.com`.
-
----
-
-### 2. Outbound Emails Marked as Spam by Gmail / Outlook
-
-#### Symptoms
-- Sent emails land in Spam / Junk folders.
-- Google bounces with `550-5.7.26 This message does not pass authentication checks (SPF and DKIM)`.
-
-#### Resolution Steps
-1. **Check Reverse DNS (rDNS):**
-   ```bash
-   dig -x YOUR_PUBLIC_IP +short
-   ```
-   Must match `mail.yourdomain.com.`.
-2. **Validate DKIM Signature:**
-   Check the headers of the received email. Look for:
-   ```
-   Authentication-Results: mx.google.com;
-       dkim=pass header.i=@yourdomain.com header.s=mailhive ...
-   ```
-   If DKIM fails or is missing:
-   - Check if DKIM key exists in Rspamd:
-     ```bash
-     docker exec mailhive-rspamd ls -la /var/lib/rspamd/dkim/
-     ```
-   - Verify selector in `docker/rspamd/local.d/dkim_signing.conf` matches DNS selector (`mailhive`).
-3. **Verify SPF Record:**
-   ```bash
-   dig TXT yourdomain.com +short | grep "v=spf1"
-   ```
-   Must contain your server's sending IP (`ip4:<IP>`).
-
----
-
-### 3. "Cached message size larger than expected" Dovecot Error
-
-#### Symptoms
-- IMAP client or Webmail throws `FETCH failed: Internal error occurred`.
-- Dovecot logs report:
-  `Mailbox INBOX: UID=x: read(...) failed: Cached message size larger than expected (500 > 369)`.
-
-#### Cause
-A message was placed into the Maildir with an invalid `,S=<size>` flag that does not match the file's actual byte length.
-
-#### Resolution
-Force Dovecot to rebuild and resync its mailbox index:
 ```bash
-docker exec mailhive-dovecot doveadm force-resync -u <user@domain.com> INBOX
-```
-To resync all mailboxes across all accounts:
-```bash
-docker exec mailhive-dovecot doveadm force-resync -A '*'
+curl --fail http://127.0.0.1:4000/api/health
+docker logs --tail 100 mailhive-api
+docker logs --tail 100 mailhive-dovecot
+docker logs --tail 100 mailhive-postfix
+docker logs --tail 100 mailhive-rspamd
+docker exec mailhive-postfix postqueue -p
 ```
 
----
+Health covers PostgreSQL, Redis, SMTP/IMAP connectivity and the Rspamd HTTP ping. A healthy listener does not establish successful authentication or external delivery. The admin system page shows the same health information. Do not delete the mail queue to resolve a transport failure; inspect the queue ID and underlying error first.
 
-### 4. BullMQ Provisioning Jobs Stuck or Failed
+## “Couldn't load your mail” / IMAP FETCH disconnect
 
-#### Symptoms
-- Newly created mailbox or domain shows as "PROVISIONING" or fails to generate DKIM keys.
+The confirmed incident involved imported Maildir filenames with `S=500` but only 369 bytes of content. Dovecot reported “Cached message size larger than expected”. A secondary LOGOUT exception hid the original FETCH failure.
 
-#### Diagnostic Steps
-1. Check Admin Jobs UI:
-   Navigate to `/admin/jobs` to inspect the Failed / DLQ tabs and view error stack traces.
-2. Check Redis connectivity from API:
-   ```bash
-   docker exec -it mailhive-api node -e "
-     const Redis = require('ioredis');
-     const redis = new Redis({ host: 'redis', port: 6379, password: process.env.REDIS_PASSWORD });
-     redis.ping().then(console.log).then(() => redis.quit());
-   "
-   ```
-3. Inspect worker logs:
-   ```bash
-   docker logs --tail 100 mailhive-api | grep -i "provisioning"
-   ```
+The API now preserves the original error and the Dovecot configuration contains `maildir_broken_filename_sizes = yes`. Back up the affected mailbox before repair, verify the running configuration contains that setting, then resync only the affected folder:
 
----
+```bash
+docker exec mailhive-dovecot doveconf maildir_broken_filename_sizes
+docker exec mailhive-dovecot doveadm force-resync -u user@yourdomain.com INBOX
+```
 
-### 5. API Rate Limiting (HTTP 429 Too Many Requests)
+Never generate test mail by inventing size suffixes in Maildir filenames; use SMTP or IMAP APPEND. A 401 means session expiry/account authorization, while a 503 normally indicates unavailable infrastructure. Inspect the request ID and server logs before attempting data repair.
 
-#### Symptoms
-- Clients or webmail get HTTP 429 errors during bulk requests.
+## Authentication or submission failures
 
-#### Resolution
-- Default limits are:
-  - Burst: 30 requests / second.
-  - Sustained: 200 requests / minute.
-- To adjust, update `ThrottlerModule` configuration in `apps/api/src/app.module.ts`:
-  ```ts
-  ThrottlerModule.forRoot([
-    { name: 'short', ttl: 1000, limit: 50 },
-    { name: 'medium', ttl: 60000, limit: 500 },
-  ])
-  ```
-  Rebuild and restart the API container:
-  ```bash
-  docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.dev up -d --build api
-  ```
+Use interactive `docker exec -it mailhive-dovecot doveadm auth test user@yourdomain.com` so the password is prompted rather than placed in shell history. Check that both mailbox and domain are active, credentials are current, and the certificate matches `MAIL_HOSTNAME`.
+
+After restarting/replacing Dovecot, run `docker exec mailhive-postfix postfix reload` to close cached SASL connections. A temporary 454 after a daemon restart can be a stale auth connection. Do not automatically resend a message if the API reported SMTP acceptance but a failed Sent copy; that message may already be delivered.
+
+For vacation replies, check Dovecot Sieve logs and the user's active script. Global spam routing is separate from IMAP-only training scripts. Replies use internal certificate-authorized TLS on 2525. After certificate changes run the renewal hook to refresh Postfix's allowed fingerprint. Do not publish that internal port or replace its certificate authorization with network-wide relay permission.
+
+## Provisioning and DKIM
+
+Inspect `/admin/jobs` for the actual failure and job state. The worker needs UID/GID 5000 write access to Maildir and the Rspamd DKIM directory; startup scripts establish the shared permissions. Fix the cause and use Retry for a failed/dead-letter job. Durable SQL jobs are reconciled with BullMQ every 30 seconds.
+
+For domain lookups, the correct map is:
+
+```bash
+docker exec mailhive-postfix postmap -q yourdomain.com pgsql:/etc/postfix/pgsql-virtual-domains.cf
+```
+
+A disabled/deleted domain or mailbox is intentionally unavailable. Check DKIM selector `mailhive`, the key file permissions and the exact public key in DNS. Never paste private keys into tickets.
+
+## Spam, quotas and rate limits
+
+Moving a message into Junk trains spam; moving it out trains ham, except moving it to Trash. Training requires the Rspamd controller and the protected Dovecot curl credential file. The regression script verifies successful learning transactions; cached class totals may lag. GTUBE is a harmless filter test and should be rejected during SMTP DATA.
+
+Admin usage reads Dovecot `maildirsize`. “Usage unavailable” indicates a missing, malformed or oversized quota counter, not zero usage. Verify Dovecot's quota configuration/counters; do not edit quota files while the mailbox is active.
+
+General API limits are 30 requests/second and 200/minute per API process, with a separate 20/minute login limit. A reverse proxy must overwrite forwarding headers, and `TRUST_PROXY` must list only its real IP/CIDR. Otherwise users can share a rate-limit bucket. Investigate request loops before raising limits.
+
+## Public delivery and recovery
+
+Check MX, PTR, SPF, DKIM and DMARC on the actual public domain; inspect the recipient provider's Authentication-Results. Local `.test` delivery cannot validate public reputation or DNS. Follow the [deployment runbook](deployment-runbook.md) for production verification and [isolated restore procedure](deployment-runbook.md#backup-and-restore) for recovery. Test scripts must never restore over live volumes.

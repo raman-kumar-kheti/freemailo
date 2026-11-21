@@ -3,6 +3,7 @@ import smtplib
 import imaplib
 import ssl
 import email
+import re
 from email.mime.text import MIMEText
 import time
 import sys
@@ -88,7 +89,7 @@ def run_phase2_verification():
     # -------------------------------------------------------------------------
     # TEST 6: Admin Create Domain & DKIM Generation
     # -------------------------------------------------------------------------
-    test_domain_name = f"testdomain-{int(time.time())}.org"
+    test_domain_name = f"testdomain-{time.time_ns()}.test"
     print(f"\n--- Test 6: Create Domain & Generate DKIM (POST /api/admin/domains) for {test_domain_name} ---")
     res = requests.post(f"{BASE_URL}/api/admin/domains", headers=admin_headers, json={"name": test_domain_name})
     if res.status_code != 201:
@@ -115,11 +116,11 @@ def run_phase2_verification():
     # -------------------------------------------------------------------------
     charlie_local = f"user{int(time.time()) % 10000}"
     charlie_pass = "CharliePassSecure123!"
-    charlie_email = f"{charlie_local}@{default_domain['name']}"
+    charlie_email = f"{charlie_local}@{new_domain['name']}"
     print(f"\n--- Test 7: Provisioning Mailbox via API ({charlie_email}) ---")
     res = requests.post(f"{BASE_URL}/api/admin/mailboxes", headers=admin_headers, json={
         "localPart": charlie_local,
-        "domainId": default_domain["id"],
+        "domainId": new_domain["id"],
         "password": charlie_pass,
         "displayName": "Charlie Automator",
         "quotaBytes": 1073741824
@@ -193,6 +194,10 @@ def run_phase2_verification():
         status, fetch_data = imap.fetch(msg_ids[-1], '(RFC822)')
         parsed = email.message_from_bytes(fetch_data[0][1])
         print(f"✅ Retrieved message: '{parsed.get('Subject')}' from '{parsed.get('From')}'")
+        signature = parsed.get('DKIM-Signature', '')
+        assert re.search(r'(?:^|;)\s*d=' + re.escape(new_domain['name']) + r'(?:;|\s|$)', signature), 'Outbound message missing the provisioned domain DKIM signature'
+        assert re.search(r'(?:^|;)\s*s=mailhive(?:;|\s|$)', signature), 'Unexpected DKIM selector'
+        print('✅ Real delivered MIME contains the provisioned domain DKIM signature (public DNS verification is a deployment check).')
         imap.logout()
     except Exception as e:
         print(f"❌ Dovecot IMAP check failed: {e}")

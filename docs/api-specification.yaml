@@ -1,1361 +1,1369 @@
-openapi: 3.1.0
-info:
-  title: MailHive API
-  version: 1.0.0
-  description: |
-    Self-hosted multi-domain email platform API.
-    All endpoints require authentication unless noted.
-  contact:
-    name: MailHive Team
-  license:
-    name: MIT
-
-servers:
-  - url: http://localhost:4000
-    description: Development
-  - url: https://api.mail.example.com
-    description: Production
-
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-
-  schemas:
-    # --- Pagination ---
-    PaginationMeta:
-      type: object
-      properties:
-        page: { type: integer, example: 1 }
-        pageSize: { type: integer, example: 50 }
-        total: { type: integer, example: 243 }
-        totalPages: { type: integer, example: 5 }
-
-    PaginatedResponse:
-      type: object
-      properties:
-        data: { type: array, items: {} }
-        meta: { $ref: '#/components/schemas/PaginationMeta' }
-
-    # --- Error ---
-    ErrorResponse:
-      type: object
-      required: [statusCode, message]
-      properties:
-        statusCode: { type: integer }
-        message: { type: string }
-        error: { type: string }
-        details: { type: array, items: { type: object } }
-
-    # --- Auth ---
-    LoginRequest:
-      type: object
-      required: [email, password]
-      properties:
-        email: { type: string, format: email, example: "user@example.com" }
-        password: { type: string, minLength: 8, example: "securepass123" }
-
-    LoginResponse:
-      type: object
-      properties:
-        accessToken: { type: string }
-        expiresIn: { type: integer, example: 900 }
-        user:
-          type: object
-          properties:
-            id: { type: string }
-            email: { type: string }
-            displayName: { type: string }
-            role: { type: string, enum: [mailbox, admin, super_admin] }
-
-    # --- Domain ---
-    Domain:
-      type: object
-      properties:
-        id: { type: string }
-        name: { type: string, example: "example.com" }
-        isActive: { type: boolean }
-        isVerified: { type: boolean }
-        mxVerified: { type: boolean }
-        spfVerified: { type: boolean }
-        dkimVerified: { type: boolean }
-        dmarcVerified: { type: boolean }
-        dkimSelector: { type: string }
-        dkimPublicKey: { type: string }
-        mailboxCount: { type: integer }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    CreateDomainRequest:
-      type: object
-      required: [name]
-      properties:
-        name: { type: string, example: "example.com" }
-
-    DnsRecords:
-      type: object
-      properties:
-        mx:
-          type: object
-          properties:
-            type: { type: string, example: "MX" }
-            host: { type: string, example: "example.com" }
-            value: { type: string, example: "mail.example.com" }
-            priority: { type: integer, example: 10 }
-            verified: { type: boolean }
-        spf:
-          type: object
-          properties:
-            type: { type: string, example: "TXT" }
-            host: { type: string, example: "example.com" }
-            value: { type: string, example: "v=spf1 mx ~all" }
-            verified: { type: boolean }
-        dkim:
-          type: object
-          properties:
-            type: { type: string, example: "TXT" }
-            host: { type: string, example: "mailhive._domainkey.example.com" }
-            value: { type: string }
-            verified: { type: boolean }
-        dmarc:
-          type: object
-          properties:
-            type: { type: string, example: "TXT" }
-            host: { type: string, example: "_dmarc.example.com" }
-            value: { type: string, example: "v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com" }
-            verified: { type: boolean }
-        ptr:
-          type: object
-          properties:
-            description: { type: string }
-            value: { type: string }
-        mtaSts:
-          type: object
-          properties:
-            description: { type: string }
-            value: { type: string }
-
-    # --- Mailbox ---
-    Mailbox:
-      type: object
-      properties:
-        id: { type: string }
-        email: { type: string }
-        localPart: { type: string }
-        domainId: { type: string }
-        domainName: { type: string }
-        displayName: { type: string }
-        quotaBytes: { type: integer }
-        usedBytes: { type: integer }
-        quotaPercent: { type: number }
-        isActive: { type: boolean }
-        lastLoginAt: { type: string, format: date-time, nullable: true }
-        createdAt: { type: string, format: date-time }
-
-    CreateMailboxRequest:
-      type: object
-      required: [localPart, domainId, password]
-      properties:
-        localPart: { type: string, example: "john" }
-        domainId: { type: string }
-        password: { type: string, minLength: 8 }
-        displayName: { type: string, example: "John Doe" }
-        quotaBytes: { type: integer, example: 1073741824 }
-
-    # --- Alias ---
-    Alias:
-      type: object
-      properties:
-        id: { type: string }
-        sourceAddress: { type: string, example: "info@example.com" }
-        destinationMailboxId: { type: string }
-        destinationEmail: { type: string }
-        domainId: { type: string }
-        isActive: { type: boolean }
-        createdAt: { type: string, format: date-time }
-
-    CreateAliasRequest:
-      type: object
-      required: [sourceAddress, destinationMailboxId, domainId]
-      properties:
-        sourceAddress: { type: string }
-        destinationMailboxId: { type: string }
-        domainId: { type: string }
-
-    # --- Mail ---
-    Folder:
-      type: object
-      properties:
-        name: { type: string, example: "INBOX" }
-        path: { type: string, example: "INBOX" }
-        delimiter: { type: string, example: "/" }
-        specialUse: { type: string, example: "\\Inbox", nullable: true }
-        total: { type: integer }
-        unread: { type: integer }
-        children: { type: array, items: { $ref: '#/components/schemas/Folder' } }
-
-    MessageListItem:
-      type: object
-      properties:
-        uid: { type: integer }
-        messageId: { type: string }
-        threadId: { type: string }
-        from:
-          type: object
-          properties:
-            name: { type: string }
-            address: { type: string }
-        to: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        subject: { type: string }
-        snippet: { type: string, maxLength: 200 }
-        date: { type: string, format: date-time }
-        flags: { type: array, items: { type: string } }
-        isRead: { type: boolean }
-        isStarred: { type: boolean }
-        hasAttachments: { type: boolean }
-        labels: { type: array, items: { type: string } }
-
-    Message:
-      type: object
-      properties:
-        uid: { type: integer }
-        messageId: { type: string }
-        threadId: { type: string }
-        from:
-          type: object
-          properties:
-            name: { type: string }
-            address: { type: string }
-        to: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        cc: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        bcc: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        replyTo: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        subject: { type: string }
-        date: { type: string, format: date-time }
-        flags: { type: array, items: { type: string } }
-        isRead: { type: boolean }
-        isStarred: { type: boolean }
-        htmlBody: { type: string, description: "Sanitized HTML body" }
-        textBody: { type: string }
-        attachments:
-          type: array
-          items:
-            type: object
-            properties:
-              partId: { type: string }
-              filename: { type: string }
-              contentType: { type: string }
-              size: { type: integer }
-              contentId: { type: string, nullable: true }
-        headers:
-          type: object
-          additionalProperties: { type: string }
-        authResults:
-          type: object
-          properties:
-            spf: { type: string, enum: [pass, fail, softfail, neutral, none] }
-            dkim: { type: string, enum: [pass, fail, none] }
-            dmarc: { type: string, enum: [pass, fail, none] }
-
-    Thread:
-      type: object
-      properties:
-        threadId: { type: string }
-        subject: { type: string }
-        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
-        participants: { type: array, items: { type: object, properties: { name: { type: string }, address: { type: string } } } }
-        messageCount: { type: integer }
-
-    SendMailRequest:
-      type: object
-      required: [to, subject]
-      properties:
-        to: { type: array, items: { type: string, format: email } }
-        cc: { type: array, items: { type: string, format: email } }
-        bcc: { type: array, items: { type: string, format: email } }
-        subject: { type: string }
-        htmlBody: { type: string }
-        textBody: { type: string }
-        inReplyTo: { type: string, description: "Message-ID for replies" }
-        references: { type: array, items: { type: string } }
-        signatureId: { type: string, nullable: true }
-      description: "Attachments sent as multipart/form-data"
-
-    SaveDraftRequest:
-      type: object
-      properties:
-        to: { type: array, items: { type: string } }
-        cc: { type: array, items: { type: string } }
-        bcc: { type: array, items: { type: string } }
-        subject: { type: string }
-        htmlBody: { type: string }
-        textBody: { type: string }
-
-    UpdateFlagsRequest:
-      type: object
-      required: [folder, uids, flags, action]
-      properties:
-        folder: { type: string }
-        uids: { type: array, items: { type: integer } }
-        flags: { type: array, items: { type: string, enum: ["\\Seen", "\\Flagged", "\\Deleted", "\\Draft"] } }
-        action: { type: string, enum: [add, remove, set] }
-
-    MoveMessagesRequest:
-      type: object
-      required: [sourceFolder, destinationFolder, uids]
-      properties:
-        sourceFolder: { type: string }
-        destinationFolder: { type: string }
-        uids: { type: array, items: { type: integer } }
-
-    DeleteMessagesRequest:
-      type: object
-      required: [folder, uids]
-      properties:
-        folder: { type: string }
-        uids: { type: array, items: { type: integer } }
-        permanent: { type: boolean, default: false }
-
-    # --- Settings ---
-    Profile:
-      type: object
-      properties:
-        email: { type: string }
-        displayName: { type: string }
-
-    SignatureObj:
-      type: object
-      properties:
-        id: { type: string }
-        name: { type: string }
-        body: { type: string }
-        isDefault: { type: boolean }
-
-    ChangePasswordRequest:
-      type: object
-      required: [currentPassword, newPassword]
-      properties:
-        currentPassword: { type: string }
-        newPassword: { type: string, minLength: 8 }
-
-    VacationResponder:
-      type: object
-      properties:
-        isActive: { type: boolean }
-        subject: { type: string }
-        body: { type: string }
-        startDate: { type: string, format: date, nullable: true }
-        endDate: { type: string, format: date, nullable: true }
-
-    Label:
-      type: object
-      properties:
-        id: { type: string }
-        name: { type: string }
-        color: { type: string, nullable: true }
-        isSystem: { type: boolean }
-
-    Contact:
-      type: object
-      properties:
-        id: { type: string }
-        email: { type: string }
-        displayName: { type: string, nullable: true }
-        contactCount: { type: integer }
-
-    # --- Admin ---
-    AuditLogEntry:
-      type: object
-      properties:
-        id: { type: string }
-        actorType: { type: string }
-        actorId: { type: string }
-        action: { type: string }
-        resourceType: { type: string }
-        resourceId: { type: string }
-        details: { type: object }
-        ipAddress: { type: string }
-        createdAt: { type: string, format: date-time }
-
-    ProvisionJob:
-      type: object
-      properties:
-        id: { type: string }
-        type: { type: string }
-        status: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED, DEAD_LETTER] }
-        payload: { type: object }
-        result: { type: object, nullable: true }
-        attempts: { type: integer }
-        maxAttempts: { type: integer }
-        lastError: { type: string, nullable: true }
-        createdAt: { type: string, format: date-time }
-        completedAt: { type: string, format: date-time, nullable: true }
-
-    # --- Realtime ---
-    MailEvent:
-      type: object
-      properties:
-        type: { type: string, enum: [new_mail, flags_updated, expunge] }
-        folder: { type: string }
-        uid: { type: integer }
-        message: { $ref: '#/components/schemas/MessageListItem' }
-
-  parameters:
-    PageParam:
-      in: query
-      name: page
-      schema: { type: integer, default: 1, minimum: 1 }
-    PageSizeParam:
-      in: query
-      name: pageSize
-      schema: { type: integer, default: 50, minimum: 1, maximum: 200 }
-    FolderParam:
-      in: query
-      name: folder
-      required: true
-      schema: { type: string, default: "INBOX" }
-
-  responses:
-    BadRequest:
-      description: Validation error
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }
-    Unauthorized:
-      description: Missing or invalid authentication
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }
-    Forbidden:
-      description: Insufficient permissions
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }
-    NotFound:
-      description: Resource not found
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }
-    TooManyRequests:
-      description: Rate limit exceeded
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ErrorResponse' }
-          example:
-            statusCode: 429
-            message: "Rate limit exceeded. Try again in 60 seconds."
-      headers:
-        Retry-After:
-          schema: { type: integer }
-        X-RateLimit-Limit:
-          schema: { type: integer }
-        X-RateLimit-Remaining:
-          schema: { type: integer }
-
-security:
-  - bearerAuth: []
-
+# Generated from the running /api/docs-json on 2026-11-21.
+# Route/DTO snapshot; response schemas depend on controller annotations.
+openapi: 3.0.0
 paths:
-  # ===========================================================================
-  # AUTH
-  # ===========================================================================
   /api/auth/login:
     post:
-      tags: [Auth]
-      summary: Mailbox user login
-      security: []
+      operationId: AuthController_login
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LoginRequest' }
+            schema:
+              $ref: '#/components/schemas/LoginDto'
       responses:
         '200':
-          description: Login successful
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-          headers:
-            Set-Cookie:
-              description: httpOnly refresh token cookie
-              schema: { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-
+          description: ''
+      summary: Mailbox user login
+      tags:
+      - Auth
   /api/auth/admin/login:
     post:
-      tags: [Auth]
-      summary: Admin user login
-      security: []
+      operationId: AuthController_adminLogin
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LoginRequest' }
+            schema:
+              $ref: '#/components/schemas/LoginDto'
       responses:
         '200':
-          description: Login successful
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '429': { $ref: '#/components/responses/TooManyRequests' }
-
+          description: ''
+      summary: Admin user login
+      tags:
+      - Auth
   /api/auth/refresh:
     post:
-      tags: [Auth]
-      summary: Refresh access token using refresh token cookie
-      security: []
+      operationId: AuthController_refresh
+      parameters: []
       responses:
         '200':
-          description: Token refreshed
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/LoginResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
+          description: ''
+      summary: Rotate and refresh access token
+      tags:
+      - Auth
   /api/auth/logout:
     post:
-      tags: [Auth]
-      summary: Revoke refresh token and clear cookie
+      operationId: AuthController_logout
+      parameters: []
       responses:
-        '204': { description: Logged out }
-
+        '204':
+          description: ''
+      summary: Logout and revoke refresh token
+      tags:
+      - Auth
   /api/auth/me:
     get:
-      tags: [Auth]
-      summary: Get current authenticated user
+      operationId: AuthController_getMe
+      parameters: []
       responses:
         '200':
-          description: Current user info
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id: { type: string }
-                  email: { type: string }
-                  displayName: { type: string }
-                  role: { type: string }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-
-  # ===========================================================================
-  # ADMIN - DOMAINS
-  # ===========================================================================
+          description: ''
+      summary: Get current user profile
+      tags:
+      - Auth
   /api/admin/domains:
     get:
-      tags: [Admin - Domains]
-      summary: List all domains
+      operationId: AdminController_listDomains
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: search
-          schema: { type: string }
+      - name: page
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: pageSize
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: search
+        required: true
+        in: query
+        schema:
+          type: string
       responses:
         '200':
-          description: Domain list
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/Domain' } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
+          description: ''
+      security:
+      - bearer: []
+      summary: List all domains
+      tags:
+      - Admin
     post:
-      tags: [Admin - Domains]
-      summary: Add a new domain
+      operationId: AdminController_createDomain
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateDomainRequest' }
+            schema:
+              $ref: '#/components/schemas/CreateDomainDto'
       responses:
         '201':
-          description: Domain created, DKIM generation enqueued
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Domain' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '409':
-          description: Domain already exists
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Add a new domain
+      tags:
+      - Admin
   /api/admin/domains/{id}:
     get:
-      tags: [Admin - Domains]
+      operationId: AdminController_getDomain
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
       summary: Get domain details
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Domain' }
-        '404': { $ref: '#/components/responses/NotFound' }
-    patch:
-      tags: [Admin - Domains]
-      summary: Update domain
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                isActive: { type: boolean }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Domain' }
+      tags:
+      - Admin
     delete:
-      tags: [Admin - Domains]
-      summary: Soft-delete domain
+      operationId: AdminController_deleteDomain
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
-        '204': { description: Domain deleted }
-        '404': { $ref: '#/components/responses/NotFound' }
-
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Soft delete domain
+      tags:
+      - Admin
   /api/admin/domains/{id}/dns:
     get:
-      tags: [Admin - Domains]
-      summary: Get required DNS records for domain
+      operationId: AdminController_getDomainDns
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/DnsRecords' }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Get required DNS records for domain
+      tags:
+      - Admin
   /api/admin/domains/{id}/verify:
     post:
-      tags: [Admin - Domains]
-      summary: Trigger DNS verification for domain
+      operationId: AdminController_verifyDomainDns
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Domain' }
-
-  # ===========================================================================
-  # ADMIN - MAILBOXES
-  # ===========================================================================
+          description: ''
+      security:
+      - bearer: []
+      summary: Trigger DNS verification check
+      tags:
+      - Admin
   /api/admin/mailboxes:
     get:
-      tags: [Admin - Mailboxes]
-      summary: List mailboxes
+      operationId: AdminController_listMailboxes
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: domainId
-          schema: { type: string }
-        - in: query
-          name: search
-          schema: { type: string }
+      - name: page
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: pageSize
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: domainId
+        required: true
+        in: query
+        schema:
+          type: string
+      - name: search
+        required: true
+        in: query
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/Mailbox' } }
+          description: ''
+      security:
+      - bearer: []
+      summary: List mailboxes
+      tags:
+      - Admin
     post:
-      tags: [Admin - Mailboxes]
-      summary: Create a new mailbox
+      operationId: AdminController_createMailbox
+      parameters: []
       requestBody:
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/CreateMailboxRequest' }
-      responses:
-        '202':
-          description: Mailbox creation enqueued
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  mailbox: { $ref: '#/components/schemas/Mailbox' }
-                  jobId: { type: string }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '409': { description: Email already exists }
-
-  /api/admin/mailboxes/{id}:
-    get:
-      tags: [Admin - Mailboxes]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Mailbox' }
-    patch:
-      tags: [Admin - Mailboxes]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                displayName: { type: string }
-                quotaBytes: { type: integer }
-                isActive: { type: boolean }
-                password: { type: string }
+              $ref: '#/components/schemas/CreateMailboxDto'
+      responses:
+        '202':
+          description: ''
+      security:
+      - bearer: []
+      summary: Create new mailbox and trigger provisioning
+      tags:
+      - Admin
+  /api/admin/mailboxes/{id}:
+    get:
+      operationId: AdminController_getMailbox
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Mailbox' }
-    delete:
-      tags: [Admin - Mailboxes]
+          description: ''
+      security:
+      - bearer: []
+      summary: Get mailbox details
+      tags:
+      - Admin
+    patch:
+      operationId: AdminController_updateMailbox
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMailboxDto'
       responses:
-        '204': { description: Mailbox deletion enqueued }
-
-  # ===========================================================================
-  # ADMIN - ALIASES
-  # ===========================================================================
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: Update mailbox attributes or password
+      tags:
+      - Admin
+    delete:
+      operationId: AdminController_deleteMailbox
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Delete mailbox
+      tags:
+      - Admin
   /api/admin/aliases:
     get:
-      tags: [Admin - Aliases]
+      operationId: AdminController_listAliases
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: domainId
-          schema: { type: string }
+      - name: page
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: pageSize
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: domainId
+        required: true
+        in: query
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/Alias' } }
+          description: ''
+      security:
+      - bearer: []
+      summary: List aliases
+      tags:
+      - Admin
     post:
-      tags: [Admin - Aliases]
+      operationId: AdminController_createAlias
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/CreateAliasRequest' }
+            schema:
+              $ref: '#/components/schemas/CreateAliasDto'
       responses:
         '201':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Alias' }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Create alias
+      tags:
+      - Admin
   /api/admin/aliases/{id}:
     delete:
-      tags: [Admin - Aliases]
+      operationId: AdminController_deleteAlias
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
-        '204': { description: Alias deleted }
-
-  # ===========================================================================
-  # ADMIN - JOBS & AUDIT
-  # ===========================================================================
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Delete alias
+      tags:
+      - Admin
   /api/admin/jobs:
     get:
-      tags: [Admin - Operations]
-      summary: List provision jobs
+      operationId: AdminController_listJobs
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: status
-          schema: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED, DEAD_LETTER] }
-        - in: query
-          name: type
-          schema: { type: string }
+      - name: page
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: pageSize
+        required: true
+        in: query
+        schema:
+          type: number
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/ProvisionJob' } }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: List provisioning queue jobs
+      tags:
+      - Admin
+  /api/admin/jobs/{id}/retry:
+    post:
+      operationId: AdminController_retryJob
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '202':
+          description: ''
+      security:
+      - bearer: []
+      tags:
+      - Admin
+  /api/admin/jobs/{id}:
+    get:
+      operationId: AdminController_getJob
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: Get provisioning job status
+      tags:
+      - Admin
   /api/admin/audit-log:
     get:
-      tags: [Admin - Operations]
-      summary: Paginated audit log
+      operationId: AdminController_getAuditLog
       parameters:
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: actorType
-          schema: { type: string }
-        - in: query
-          name: action
-          schema: { type: string }
-        - in: query
-          name: resourceType
-          schema: { type: string }
-        - in: query
-          name: from
-          schema: { type: string, format: date-time }
-        - in: query
-          name: to
-          schema: { type: string, format: date-time }
+      - name: page
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: pageSize
+        required: true
+        in: query
+        schema:
+          type: number
+      - name: action
+        required: true
+        in: query
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/AuditLogEntry' } }
-
-  # ===========================================================================
-  # MAIL API
-  # ===========================================================================
+          description: ''
+      security:
+      - bearer: []
+      summary: Query audit logs
+      tags:
+      - Admin
   /api/mail/folders:
     get:
-      tags: [Mail]
-      summary: List IMAP folders with counts
+      operationId: MailController_getFolders
+      parameters: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  folders: { type: array, items: { $ref: '#/components/schemas/Folder' } }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: List IMAP folders with message and unread counts
+      tags:
+      - Mail
   /api/mail/messages:
     get:
-      tags: [Mail]
-      summary: Paginated message list
+      operationId: MailController_getMessages
       parameters:
-        - { $ref: '#/components/parameters/FolderParam' }
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
-        - in: query
-          name: sort
-          schema: { type: string, enum: [date, from, subject, size], default: date }
-        - in: query
-          name: order
-          schema: { type: string, enum: [asc, desc], default: desc }
+      - name: folder
+        required: false
+        in: query
+        description: Folder path
+        schema:
+          default: INBOX
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Page number
+        schema:
+          default: 1
+          type: number
+      - name: pageSize
+        required: false
+        in: query
+        description: Items per page
+        schema:
+          maximum: 100
+          default: 50
+          type: number
+      - name: sort
+        required: false
+        in: query
+        schema:
+          default: date
+          type: string
+          enum:
+          - date
+          - from
+          - subject
+          - size
+      - name: order
+        required: false
+        in: query
+        schema:
+          default: desc
+          type: string
+          enum:
+          - asc
+          - desc
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/MessageListItem' } }
+          description: ''
+      security:
+      - bearer: []
+      summary: Paginated message list for a folder
+      tags:
+      - Mail
     delete:
-      tags: [Mail]
-      summary: Batch delete messages
+      operationId: MailController_deleteMessages
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/DeleteMessagesRequest' }
+            schema:
+              $ref: '#/components/schemas/DeleteMessagesDto'
       responses:
-        '204': { description: Messages deleted }
-
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Batch delete messages (move to Trash or permanent delete)
+      tags:
+      - Mail
   /api/mail/messages/{uid}:
     get:
-      tags: [Mail]
-      summary: Get full message
+      operationId: MailController_getMessage
       parameters:
-        - in: path
-          name: uid
-          required: true
-          schema: { type: integer }
-        - { $ref: '#/components/parameters/FolderParam' }
+      - name: uid
+        required: true
+        in: path
+        schema:
+          type: number
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Message' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Get full message by UID
+      tags:
+      - Mail
   /api/mail/messages/{uid}/raw:
     get:
-      tags: [Mail]
-      summary: Get raw RFC 5322 message
+      operationId: MailController_getRawMessage
       parameters:
-        - in: path
-          name: uid
-          required: true
-          schema: { type: integer }
-        - { $ref: '#/components/parameters/FolderParam' }
+      - name: uid
+        required: true
+        in: path
+        schema:
+          type: number
       responses:
         '200':
-          content:
-            text/plain:
-              schema: { type: string }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Get raw RFC 5322 message source
+      tags:
+      - Mail
   /api/mail/threads/{threadId}:
     get:
-      tags: [Mail]
-      summary: Get threaded conversation
+      operationId: MailController_getThread
       parameters:
-        - in: path
-          name: threadId
-          required: true
-          schema: { type: string }
+      - name: threadId
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Thread' }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Get threaded conversation
+      tags:
+      - Mail
   /api/mail/send:
     post:
-      tags: [Mail]
-      summary: Send email
+      operationId: MailController_sendMail
+      parameters: []
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                to: { type: string, description: "JSON array of email addresses" }
-                cc: { type: string }
-                bcc: { type: string }
-                subject: { type: string }
-                htmlBody: { type: string }
-                textBody: { type: string }
-                inReplyTo: { type: string }
-                references: { type: string }
-                signatureId: { type: string }
-                attachments:
-                  type: array
-                  items:
-                    type: string
-                    format: binary
+              $ref: '#/components/schemas/SendMailDto'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMailDto'
       responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  messageId: { type: string }
-                  success: { type: boolean }
-        '400': { $ref: '#/components/responses/BadRequest' }
-
+        '201':
+          description: ''
+      security:
+      - bearer: []
+      summary: Send email via Postfix authenticated submission
+      tags:
+      - Mail
   /api/mail/draft:
     post:
-      tags: [Mail]
-      summary: Save a new draft
+      operationId: MailController_saveDraft
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SaveDraftRequest' }
+            schema:
+              $ref: '#/components/schemas/SaveDraftDto'
       responses:
         '201':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  uid: { type: integer }
-                  folder: { type: string }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Save a new draft message to Drafts folder
+      tags:
+      - Mail
   /api/mail/draft/{uid}:
     put:
-      tags: [Mail]
-      summary: Update existing draft
+      operationId: MailController_updateDraft
       parameters:
-        - in: path
-          name: uid
-          required: true
-          schema: { type: integer }
+      - name: uid
+        required: true
+        in: path
+        schema:
+          type: number
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/SaveDraftRequest' }
+            schema:
+              $ref: '#/components/schemas/SaveDraftDto'
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  uid: { type: integer }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Update an existing draft
+      tags:
+      - Mail
   /api/mail/messages/flags:
     patch:
-      tags: [Mail]
-      summary: Batch update message flags
+      operationId: MailController_updateFlags
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/UpdateFlagsRequest' }
+            schema:
+              $ref: '#/components/schemas/UpdateFlagsDto'
       responses:
-        '204': { description: Flags updated }
-
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Batch update message flags
+      tags:
+      - Mail
   /api/mail/messages/move:
     post:
-      tags: [Mail]
-      summary: Move messages between folders
+      operationId: MailController_moveMessages
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/MoveMessagesRequest' }
+            schema:
+              $ref: '#/components/schemas/MoveMessagesDto'
       responses:
-        '204': { description: Messages moved }
-
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Move messages between folders
+      tags:
+      - Mail
   /api/mail/search:
     get:
-      tags: [Mail]
-      summary: Search messages
+      operationId: MailController_search
       parameters:
-        - in: query
-          name: q
-          required: true
-          schema: { type: string }
-          description: |
-            Search query with operators:
-            from:, to:, subject:, has:attachment, is:unread, is:starred,
-            before:YYYY-MM-DD, after:YYYY-MM-DD, label:name
-        - { $ref: '#/components/parameters/FolderParam' }
-        - { $ref: '#/components/parameters/PageParam' }
-        - { $ref: '#/components/parameters/PageSizeParam' }
+      - name: q
+        required: false
+        in: query
+        description: Search query string with operators
+        schema:
+          type: string
+      - name: folder
+        required: false
+        in: query
+        description: Folder to search within
+        schema:
+          default: INBOX
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: Page number
+        schema:
+          default: 1
+          type: number
+      - name: pageSize
+        required: false
+        in: query
+        description: Items per page
+        schema:
+          maximum: 100
+          default: 50
+          type: number
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: '#/components/schemas/PaginatedResponse' }
-                  - type: object
-                    properties:
-                      data: { type: array, items: { $ref: '#/components/schemas/MessageListItem' } }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Search messages with search operators
+      tags:
+      - Mail
   /api/mail/attachments/{uid}/{partId}:
     get:
-      tags: [Mail]
-      summary: Download attachment
+      operationId: MailController_getAttachment
       parameters:
-        - in: path
-          name: uid
-          required: true
-          schema: { type: integer }
-        - in: path
-          name: partId
-          required: true
-          schema: { type: string }
-        - { $ref: '#/components/parameters/FolderParam' }
+      - name: uid
+        required: true
+        in: path
+        schema:
+          type: number
+      - name: partId
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
         '200':
-          description: Attachment file
-          content:
-            application/octet-stream:
-              schema:
-                type: string
-                format: binary
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Download attachment
+      tags:
+      - Mail
   /api/mail/events:
     get:
-      tags: [Mail]
-      summary: SSE stream for real-time mail events
-      description: |
-        Server-Sent Events endpoint. Connect with EventSource.
-        Events: new_mail, flags_updated, expunge.
-        Uses IMAP IDLE internally.
+      operationId: MailController_events
+      parameters: []
       responses:
         '200':
-          description: SSE stream
-          content:
-            text/event-stream:
-              schema:
-                type: string
-
-  # ===========================================================================
-  # USER SETTINGS
-  # ===========================================================================
+          description: ''
+      security:
+      - bearer: []
+      summary: Server-Sent Events (SSE) for realtime mailbox updates
+      tags:
+      - Mail
   /api/settings/profile:
     get:
-      tags: [Settings]
+      operationId: SettingsController_getProfile
+      parameters: []
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Profile' }
+          description: ''
+      security:
+      - bearer: []
+      summary: Get current mailbox user profile
+      tags:
+      - Settings
     put:
-      tags: [Settings]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                displayName: { type: string }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Profile' }
-
-  /api/settings/signatures:
-    get:
-      tags: [Settings]
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  signatures: { type: array, items: { $ref: '#/components/schemas/SignatureObj' } }
-    post:
-      tags: [Settings]
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, body]
-              properties:
-                name: { type: string }
-                body: { type: string }
-                isDefault: { type: boolean }
-      responses:
-        '201':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SignatureObj' }
-
-  /api/settings/signatures/{id}:
-    put:
-      tags: [Settings]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name: { type: string }
-                body: { type: string }
-                isDefault: { type: boolean }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SignatureObj' }
-    delete:
-      tags: [Settings]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '204': { description: Signature deleted }
-
-  /api/settings/password:
-    post:
-      tags: [Settings]
+      operationId: SettingsController_updateProfile
+      parameters: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
-      responses:
-        '204': { description: Password changed }
-        '400': { $ref: '#/components/responses/BadRequest' }
-
-  /api/settings/labels:
-    get:
-      tags: [Settings]
+            schema:
+              $ref: '#/components/schemas/UpdateProfileDto'
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  labels: { type: array, items: { $ref: '#/components/schemas/Label' } }
+          description: ''
+      security:
+      - bearer: []
+      summary: Update mailbox user profile
+      tags:
+      - Settings
+  /api/settings/signatures:
+    get:
+      operationId: SettingsController_listSignatures
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: List user signatures
+      tags:
+      - Settings
     post:
-      tags: [Settings]
+      operationId: SettingsController_createSignature
+      parameters: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                color: { type: string }
+              $ref: '#/components/schemas/CreateSignatureDto'
       responses:
         '201':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Label' }
-
+          description: ''
+      security:
+      - bearer: []
+      summary: Create a new signature
+      tags:
+      - Settings
+  /api/settings/signatures/{id}:
+    put:
+      operationId: SettingsController_updateSignature
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSignatureDto'
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: Update signature
+      tags:
+      - Settings
+    delete:
+      operationId: SettingsController_deleteSignature
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Delete signature
+      tags:
+      - Settings
+  /api/settings/password:
+    post:
+      operationId: SettingsController_changePassword
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordDto'
+      responses:
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Change mailbox password
+      tags:
+      - Settings
+  /api/settings/labels:
+    get:
+      operationId: SettingsController_listLabels
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: List user labels
+      tags:
+      - Settings
+    post:
+      operationId: SettingsController_createLabel
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLabelDto'
+      responses:
+        '201':
+          description: ''
+      security:
+      - bearer: []
+      summary: Create user label
+      tags:
+      - Settings
   /api/settings/labels/{id}:
     put:
-      tags: [Settings]
+      operationId: SettingsController_updateLabel
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name: { type: string }
-                color: { type: string }
+              $ref: '#/components/schemas/UpdateLabelDto'
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Label' }
+          description: ''
+      security:
+      - bearer: []
+      summary: Update user label
+      tags:
+      - Settings
     delete:
-      tags: [Settings]
+      operationId: SettingsController_deleteLabel
       parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
       responses:
-        '204': { description: Label deleted }
-
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Delete user label
+      tags:
+      - Settings
   /api/settings/vacation:
     get:
-      tags: [Settings]
+      operationId: SettingsController_getVacation
+      parameters: []
       responses:
         '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VacationResponder' }
+          description: ''
+      security:
+      - bearer: []
+      summary: Get vacation auto-reply responder settings
+      tags:
+      - Settings
     put:
-      tags: [Settings]
+      operationId: SettingsController_saveVacation
+      parameters: []
       requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/VacationResponder' }
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VacationResponder' }
-
-  /api/settings/trusted-senders:
-    get:
-      tags: [Settings]
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  senders: { type: array, items: { type: object, properties: { id: { type: string }, email: { type: string } } } }
-    post:
-      tags: [Settings]
-      requestBody:
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [email]
-              properties:
-                email: { type: string, format: email }
-      responses:
-        '201': { description: Sender added }
-
-  /api/settings/trusted-senders/{id}:
-    delete:
-      tags: [Settings]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: string }
-      responses:
-        '204': { description: Sender removed }
-
-  /api/settings/contacts:
-    get:
-      tags: [Settings]
-      parameters:
-        - in: query
-          name: q
-          schema: { type: string }
-          description: Search query for autocomplete
-        - in: query
-          name: limit
-          schema: { type: integer, default: 10 }
+              $ref: '#/components/schemas/VacationResponderDto'
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  contacts: { type: array, items: { $ref: '#/components/schemas/Contact' } }
+          description: ''
+      security:
+      - bearer: []
+      summary: Update vacation auto-reply responder settings
+      tags:
+      - Settings
+  /api/settings/trusted-senders:
+    get:
+      operationId: SettingsController_listTrustedSenders
+      parameters: []
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: List trusted senders
+      tags:
+      - Settings
+    post:
+      operationId: SettingsController_addTrustedSender
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddTrustedSenderDto'
+      responses:
+        '201':
+          description: ''
+      security:
+      - bearer: []
+      summary: Add trusted sender
+      tags:
+      - Settings
+  /api/settings/trusted-senders/{id}:
+    delete:
+      operationId: SettingsController_deleteTrustedSender
+      parameters:
+      - name: id
+        required: true
+        in: path
+        schema:
+          type: string
+      responses:
+        '204':
+          description: ''
+      security:
+      - bearer: []
+      summary: Delete trusted sender
+      tags:
+      - Settings
+  /api/settings/contacts:
+    get:
+      operationId: SettingsController_getContacts
+      parameters:
+      - name: q
+        required: true
+        in: query
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+      security:
+      - bearer: []
+      summary: Autocomplete contacts lookup
+      tags:
+      - Settings
+  /api/health:
+    get:
+      operationId: HealthController_getHealth
+      parameters: []
+      responses:
+        '200':
+          description: All core services healthy
+        '503':
+          description: One or more core services down or degraded
+      summary: System health check for Postfix, Dovecot, PostgreSQL, and Redis
+      tags:
+      - Health & Observability
+  /api/metrics:
+    get:
+      operationId: HealthController_getMetrics
+      parameters: []
+      responses:
+        '200':
+          description: Prometheus metrics text
+      summary: Prometheus metrics endpoint
+      tags:
+      - Health & Observability
+info:
+  title: MailHive API
+  description: 'Self-hosted mail and administration API. Browser sessions use HttpOnly
+    cookies; cookie-authenticated mutations require X-Requested-With: MailHive.'
+  version: 1.0.0
+  contact: {}
+tags:
+- name: Auth
+  description: ''
+- name: Admin
+  description: ''
+- name: Mail
+  description: ''
+- name: Settings
+  description: ''
+servers: []
+components:
+  securitySchemes:
+    bearer:
+      scheme: bearer
+      bearerFormat: JWT
+      type: http
+    cookie:
+      type: apiKey
+      in: cookie
+      name: access_token
+  schemas:
+    LoginDto:
+      type: object
+      properties:
+        email:
+          type: string
+          example: alice@example.test
+          description: User or Admin email
+        password:
+          type: string
+          example: alice123456
+          description: User or Admin password
+      required:
+      - email
+      - password
+    CreateDomainDto:
+      type: object
+      properties:
+        name:
+          type: string
+          example: newdomain.test
+          description: Fully qualified domain name
+      required:
+      - name
+    CreateMailboxDto:
+      type: object
+      properties:
+        localPart:
+          type: string
+          example: john
+          description: Local part before @
+        domainId:
+          type: string
+          example: cuid_here
+          description: Domain ID
+        password:
+          type: string
+          example: Password123!
+          description: Mailbox initial password
+        displayName:
+          type: string
+          example: John Doe
+          description: Display name
+        quotaBytes:
+          type: number
+          example: 1073741824
+          description: Quota in bytes (default 1GB)
+      required:
+      - localPart
+      - domainId
+      - password
+    UpdateMailboxDto:
+      type: object
+      properties:
+        displayName:
+          type: string
+          example: Johnathan Doe
+        password:
+          type: string
+          example: NewSecret123!
+        quotaBytes:
+          type: number
+          example: 2147483648
+        isActive:
+          type: boolean
+          example: true
+    CreateAliasDto:
+      type: object
+      properties:
+        sourceAddress:
+          type: string
+          example: support@example.test
+          description: Source alias address
+        destinationMailboxId:
+          type: string
+          example: cuid_mailbox_id
+          description: Destination mailbox ID
+      required:
+      - sourceAddress
+      - destinationMailboxId
+    DeleteMessagesDto:
+      type: object
+      properties:
+        folder:
+          type: string
+          description: Folder name
+          example: INBOX
+        uids:
+          description: Array of message UIDs
+          type: array
+          items:
+            type: number
+        permanent:
+          type: boolean
+          description: Permanently delete messages instead of moving to Trash
+          default: false
+      required:
+      - folder
+      - uids
+    SendMailDto:
+      type: object
+      properties:
+        to:
+          description: Array of recipient email addresses
+          type: array
+          items:
+            type: string
+        cc:
+          description: Array of CC email addresses
+          type: array
+          items:
+            type: string
+        bcc:
+          description: Array of BCC email addresses
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+          description: Subject line
+        htmlBody:
+          type: string
+          description: HTML body content
+        textBody:
+          type: string
+          description: Plain text body content
+        inReplyTo:
+          type: string
+          description: In-Reply-To Message-ID for replies
+        references:
+          description: References array for threading
+          type: array
+          items:
+            type: string
+        signatureId:
+          type: string
+          description: Signature ID to append
+      required:
+      - to
+      - subject
+    SaveDraftDto:
+      type: object
+      properties:
+        to:
+          description: Recipients array
+          type: array
+          items:
+            type: string
+        cc:
+          description: CC array
+          type: array
+          items:
+            type: string
+        bcc:
+          description: BCC array
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+          description: Subject
+        htmlBody:
+          type: string
+          description: HTML body
+        textBody:
+          type: string
+          description: Plain text body
+    UpdateFlagsDto:
+      type: object
+      properties:
+        folder:
+          type: string
+          description: Target folder
+          example: INBOX
+        uids:
+          description: Array of message UIDs
+          type: array
+          items:
+            type: number
+        flags:
+          description: Flags to update (e.g. \Seen, \Flagged)
+          type: array
+          items:
+            type: string
+        action:
+          type: string
+          enum:
+          - add
+          - remove
+          - set
+          description: Action to perform
+      required:
+      - folder
+      - uids
+      - flags
+      - action
+    MoveMessagesDto:
+      type: object
+      properties:
+        sourceFolder:
+          type: string
+          description: Source folder name
+          example: INBOX
+        destinationFolder:
+          type: string
+          description: Destination folder name
+          example: Trash
+        uids:
+          description: Array of message UIDs
+          type: array
+          items:
+            type: number
+      required:
+      - sourceFolder
+      - destinationFolder
+      - uids
+    UpdateProfileDto:
+      type: object
+      properties:
+        displayName:
+          type: string
+          description: Display name for the mailbox
+    CreateSignatureDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Signature name
+          example: Default Work Signature
+        body:
+          type: string
+          description: HTML body of signature
+        isDefault:
+          type: boolean
+          description: Is default signature
+          default: false
+      required:
+      - name
+      - body
+    UpdateSignatureDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Signature name
+        body:
+          type: string
+          description: HTML body of signature
+        isDefault:
+          type: boolean
+          description: Is default signature
+    ChangePasswordDto:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          description: Current password
+        newPassword:
+          type: string
+          description: New password (min 8 characters)
+          minLength: 8
+      required:
+      - currentPassword
+      - newPassword
+    CreateLabelDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Label name
+          example: Projects
+        color:
+          type: string
+          description: Hex color code
+          example: '#4f46e5'
+      required:
+      - name
+    UpdateLabelDto:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Label name
+        color:
+          type: string
+          description: Hex color code
+    VacationResponderDto:
+      type: object
+      properties:
+        isActive:
+          type: boolean
+          description: Whether vacation auto-reply is active
+        subject:
+          type: string
+          description: Subject of the auto-reply
+        body:
+          type: string
+          description: Body text or HTML of the auto-reply
+        startDate:
+          type: string
+          description: Start date ISO string
+        endDate:
+          type: string
+          description: End date ISO string
+      required:
+      - isActive
+      - subject
+      - body
+    AddTrustedSenderDto:
+      type: object
+      properties:
+        email:
+          type: string
+          description: Sender email to trust for automatic remote image loading
+      required:
+      - email

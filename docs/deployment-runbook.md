@@ -20,7 +20,7 @@ The API rejects insecure production cookie/TLS settings and missing secrets. For
 
 ## TLS and startup
 
-Obtain certificates using Certbot with DNS validation or an HTTP challenge served by the reverse proxy. Install the full chain as `certs/mail.crt` (0644) and private key as `certs/mail.key` (0600). The mail containers mount this directory read-only. Configure Certbot's deploy hook to invoke the absolute path to `scripts/renew-mail-certs.sh`; it uses `RENEWED_LINEAGE`, replaces both files and reloads Postfix/Dovecot. Verify renewal with `certbot renew --dry-run`. Configure the web reverse proxy separately for HTTPS and SSE streaming (disable buffering and allow long-lived responses).
+Obtain certificates using Certbot with DNS validation or an HTTP challenge served by the reverse proxy. Install the full chain as `certs/mail.crt` (0644) and private key as `certs/mail.key` (0600). The mail containers mount this directory read-only. Configure Certbot's deploy hook to invoke the absolute path to `scripts/renew-mail-certs.sh`; it uses `RENEWED_LINEAGE`, replaces both files, updates the pinned relay certificate, and reloads Postfix/Dovecot. Verify renewal with `certbot renew --dry-run`. Generate `certs/dhparams.pem` once with `openssl dhparam -out certs/dhparams.pem 2048` (0644); Postfix startup requires all three files. Configure the web reverse proxy separately for HTTPS and SSE streaming (disable buffering and allow long-lived responses).
 
 ```bash
 # Database first, then a dedicated migration container with the Prisma CLI.
@@ -38,6 +38,8 @@ curl --fail http://127.0.0.1:4000/api/health
 
 `ADMIN_PASSWORD` must contain at least 16 characters. Existing administrators are never overwritten. Create domains and mailboxes through the admin UI and wait for their provisioning jobs to complete. The development seed is explicitly disabled in production. The API and web containers run as non-root users; the API has no Docker socket. The API worker writes Maildir and DKIM volumes using UID/GID 5000. Dovecot and Rspamd prepare volume permissions on startup.
 
+Sieve-generated replies use internal port 2525 with implicit TLS and an explicitly pinned client certificate. Postfix denies this listener to clients without the matching private key; do not publish port 2525. Dovecot validates the server certificate using the shared full chain plus the OS trust store. The Compose mail hostname alias keeps this connection inside the mail network. See [Dovecot submission settings](https://doc.dovecot.org/2.3/configuration_manual/sieve/sieve_and_smtp_submission/) and [Postfix certificate authorization](https://www.postfix.org/TLS_README.html).
+
 ## Storage, jobs and monitoring
 
 Persist all five volumes: PostgreSQL, Redis, Maildir, Rspamd/DKIM, and the Postfix queue. Redis uses `noeviction` because evicting BullMQ keys can lose jobs. Monitor memory and disk capacity; a full Redis must be expanded instead of switching back to LRU eviction.
@@ -45,6 +47,8 @@ Persist all five volumes: PostgreSQL, Redis, Maildir, Rspamd/DKIM, and the Postf
 Provisioning records are durable in PostgreSQL. The worker reconciles missing queue entries every 30 seconds, retries with exponential backoff, and marks exhausted jobs `DEAD_LETTER`. Fix the underlying error and use the admin job Retry button or `POST /api/admin/jobs/:id/retry`. Mailbox deletion disables authentication/delivery and archives data under `/var/vmail/.deleted/<mailbox-id>`; purge retained mail under an explicit retention policy.
 
 `/api/health` checks PostgreSQL, Redis and mail TCP endpoints and returns 503 when degraded. `/api/metrics` exports process and account metrics. Restrict metrics and API documentation at the reverse proxy to your monitoring/administrative network. Use `docker compose logs` for structured API logs and daemon logs; ship them to your log collector. Container health checks do not replace external alerts or an end-to-end delivery probe.
+
+API rate limits are currently per API process (20 logins/minute and general request limits). Behind a proxy, set `TRUST_PROXY` to only the known proxy IPs/CIDRs and configure that proxy to overwrite incoming forwarding headers; otherwise clients share the proxy's rate-limit bucket. Do not set a trust-all value. Multi-instance deployment needs shared throttling and coordination beyond this single-host layout. IMAP/SMTP brute-force protection must be configured on the host or at the network boundary. After restarting Dovecot, reload Postfix to close cached SASL connections before opening traffic.
 
 ## Backup and restore
 
@@ -60,7 +64,7 @@ For actual disaster recovery:
 4. Start Redis and mail services, then the API/web. Run `doveadm force-resync` for affected mailboxes and check provisioning reconciliation, queues, authentication, sample attachments, and send/receive.
 5. Keep the previous volumes until recovery acceptance is complete.
 
-Do not run the legacy destructive `test-backup-restore.py` against an active deployment; use the isolated script.
+`test-backup-restore.py` is now a compatibility wrapper around the isolated verifier; it requires the backup directory as its argument.
 
 ## Release gates
 

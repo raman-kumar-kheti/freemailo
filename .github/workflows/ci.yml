@@ -7,6 +7,7 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,15 +18,91 @@ jobs:
             package-lock.json
             apps/api/package-lock.json
             apps/web/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install requests
       - run: npm ci && npm --prefix apps/api ci && npm --prefix apps/web ci
       - run: bash scripts/generate-prisma.sh
       - run: npm run lint && npm run typecheck && npm test && npm run build
       - run: npm --prefix apps/api audit --audit-level=moderate && npm --prefix apps/web audit --audit-level=moderate
       - run: cd apps/web && npx playwright install --with-deps chromium
-      - name: Populated mailbox UI and accessibility regression
+      - name: Build and initialize real mail services
         run: |
-          npm --prefix apps/web start > /tmp/web.log 2>&1 &
-          for i in $(seq 1 30); do curl -fsS http://localhost:3000/login > /dev/null && break; sleep 1; done
-          npm --prefix apps/web run test:ui -- --workers=1
-      - name: Build deployable images
-        run: docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml build
+          ./scripts/generate-certs.sh ./certs mail.example.test
+          docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml build
+          docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+          docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm --build migrate
+          docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm -e SEED_DEVELOPMENT=true -e NODE_ENV=development migrate npx ts-node prisma/seed.ts
+          docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d --wait
+      - name: Real mail, provisioning and security regressions
+        run: |
+          python scripts/test-phase2.py
+          python scripts/test-phase3.py
+          python scripts/test-revision.py
+          python scripts/test-open-relay.py
+          python scripts/test-smtp-policy.py
+          python scripts/test-authentication-headers.py
+          python scripts/test-vacation.py
+          python scripts/test-spam-learning.py
+          python scripts/test-spam-rejection.py
+      - name: Webmail, administration and accessibility
+        run: cd apps/web && npx playwright test --workers=1
+      - name: Backup and isolated restoration
+        run: |
+          ./scripts/backup.sh /tmp/mailhive-ci-backup
+          ./scripts/test-restore-isolated.sh /tmp/mailhive-ci-backup
+      - name: Failure diagnostics
+        if: failure()
+        run: docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100
+      - name: Preserve browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: apps/web/test-results/
+
+  publish:
+    # Publishing requires a successful check run and an explicit release tag push.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: api
+            context: .
+            dockerfile: apps/api/Dockerfile
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+          - service: postfix
+            context: docker/postfix
+            dockerfile: docker/postfix/Dockerfile
+          - service: dovecot
+            context: docker/dovecot
+            dockerfile: docker/dovecot/Dockerfile
+          - service: rspamd
+            context: docker/rspamd
+            dockerfile: docker/rspamd/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image namespace
+        run: echo "IMAGE_NAMESPACE=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ env.IMAGE_NAMESPACE }}/mailhive-${{ matrix.service }}:${{ github.ref_name }}
+          provenance: true
+          sbom: true
