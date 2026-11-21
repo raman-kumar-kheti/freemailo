@@ -49,5 +49,6 @@ RUN chown -R _rspamd:_rspamd \
 
 # Milter/proxy port and Web UI port
 EXPOSE 11332 11334
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s CMD curl --fail --silent --max-time 3 http://127.0.0.1:11334/ping || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]

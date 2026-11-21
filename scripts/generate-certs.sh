@@ -5,18 +5,28 @@
 set -euo pipefail
 
 CERT_DIR="${1:-./certs}"
-HOSTNAME="${2:-mail.example.test}"
+MAIL_CERT_HOSTNAME="${2:-mail.example.test}"
 
+# Re-running setup must never silently replace a working certificate/key.
+if [ -e "$CERT_DIR/mail.crt" ] || [ -e "$CERT_DIR/mail.key" ]; then
+    if [ -f "$CERT_DIR/mail.crt" ] && [ -f "$CERT_DIR/mail.key" ] && [ -f "$CERT_DIR/dhparams.pem" ]; then
+        echo "Existing certificate, key and DH parameters preserved in $CERT_DIR"
+        exit 0
+    fi
+    echo "Existing or incomplete TLS files in $CERT_DIR; inspect and preserve them before generating certificates." >&2
+    exit 1
+fi
+umask 077
 mkdir -p "$CERT_DIR"
 
-echo "🔐 Generating self-signed certificates for $HOSTNAME..."
+echo "🔐 Generating self-signed certificates for $MAIL_CERT_HOSTNAME..."
 
 openssl req -x509 -nodes -days 3650 \
   -newkey rsa:4096 \
   -keyout "$CERT_DIR/mail.key" \
   -out "$CERT_DIR/mail.crt" \
-  -subj "/C=US/ST=State/L=City/O=MailHive/CN=$HOSTNAME" \
-  -addext "subjectAltName=DNS:$HOSTNAME,DNS:*.$HOSTNAME,DNS:localhost"
+  -subj "/C=US/ST=State/L=City/O=MailHive/CN=$MAIL_CERT_HOSTNAME" \
+  -addext "subjectAltName=DNS:$MAIL_CERT_HOSTNAME,DNS:*.$MAIL_CERT_HOSTNAME,DNS:localhost"
 
 # DH parameters for Postfix
 echo "🔐 Generating DH parameters (this may take a moment)..."

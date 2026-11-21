@@ -27,7 +27,8 @@ COPY pgsql-virtual-senders.cf /etc/postfix/pgsql-virtual-senders.cf
 
 # Copy and set entrypoint
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY update-relay-cert.sh /usr/local/bin/update-relay-cert
+RUN chmod +x /entrypoint.sh /usr/local/bin/update-relay-cert
 
 # Postfix requires spool directories
 RUN mkdir -p /var/spool/postfix/pid && \

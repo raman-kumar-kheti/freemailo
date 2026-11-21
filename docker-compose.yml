@@ -42,7 +42,7 @@ services:
       - appnet
 
   # ---------------------------------------------------------------------------
-  # Redis – caching, rate-limiting, Rspamd backend
+  # Redis – caching, BullMQ and Rspamd backend
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
@@ -100,8 +100,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - mailnet
-      - appnet
+      mailnet:
+        aliases: ["${MAIL_HOSTNAME}"]
+      appnet: {}
 
   # ---------------------------------------------------------------------------
   # Dovecot – IMAP / LMTP / ManageSieve
@@ -120,6 +121,7 @@ services:
       - "4190:4190"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      RSPAMD_PASSWORD: ${RSPAMD_PASSWORD}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
       DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
@@ -136,7 +138,7 @@ services:
       - appnet
 
   # ---------------------------------------------------------------------------
-  # Rspamd – spam filtering, DKIM signing, antivirus
+  # Rspamd – spam filtering and DKIM signing
   # ---------------------------------------------------------------------------
   rspamd:
     build:
@@ -183,6 +185,7 @@ services:
       MAIL_TLS_SERVERNAME: ${MAIL_HOSTNAME}
       MAIL_TLS_REJECT_UNAUTHORIZED: ${MAIL_TLS_REJECT_UNAUTHORIZED:-true}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
       JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}

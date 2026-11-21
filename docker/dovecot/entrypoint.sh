@@ -20,6 +20,16 @@ echo "${DOVECOT_MASTER_USER:-mailhive_master}:${MASTER_USER_HASH}" > /etc/doveco
 chown root:dovecot /etc/dovecot/master-users
 chmod 640 /etc/dovecot/master-users
 
+# Sieve helpers authenticate to the private Rspamd controller. Keep the secret
+# out of process arguments and allow only the mail service UID to read it.
+: "${RSPAMD_PASSWORD:?RSPAMD_PASSWORD is required}"
+[[ "$RSPAMD_PASSWORD" != *$'\n'* && "$RSPAMD_PASSWORD" != *$'\r'* ]] || exit 1
+RSPAMD_ESCAPED="${RSPAMD_PASSWORD//\\/\\\\}"
+RSPAMD_ESCAPED="${RSPAMD_ESCAPED//\"/\\\"}"
+printf 'header = "Password: %s"\n' "$RSPAMD_ESCAPED" > /etc/dovecot/rspamd-client.conf
+chown root:vmail /etc/dovecot/rspamd-client.conf
+chmod 640 /etc/dovecot/rspamd-client.conf
+
 # Ensure vmail directory exists with correct ownership
 mkdir -p /var/vmail
 chown -R 5000:5000 /var/vmail

@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     gettext-base \
     openssl \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create vmail user/group
@@ -29,6 +30,8 @@ COPY dovecot.conf /etc/dovecot/dovecot.conf
 COPY conf.d/ /etc/dovecot/conf.d/
 COPY dovecot-sql.conf.ext /etc/dovecot/dovecot-sql.conf.ext
 COPY sieve/ /etc/dovecot/sieve/
+COPY sieve-bin/ /usr/local/lib/dovecot/sieve/
+RUN chmod 755 /usr/local/lib/dovecot/sieve/*
 
 # Copy and set entrypoint
 COPY entrypoint.sh /entrypoint.sh

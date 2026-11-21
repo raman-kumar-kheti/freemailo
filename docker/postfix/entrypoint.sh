@@ -18,20 +18,17 @@ done
 chmod 644 /etc/postfix/main.cf
 chmod 644 /etc/postfix/master.cf
 
-# Check TLS certs exist
-if [ ! -f /etc/ssl/mail/mail.crt ] || [ ! -f /etc/ssl/mail/mail.key ]; then
-    echo "⚠️  TLS certificates not found. Generating self-signed certs..."
-    mkdir -p /etc/ssl/mail
-    openssl req -x509 -nodes -days 365 \
-        -newkey rsa:2048 \
-        -keyout /etc/ssl/mail/mail.key \
-        -out /etc/ssl/mail/mail.crt \
-        -subj "/CN=${MAIL_HOSTNAME}"
-    # Generate DH params if missing
-    if [ ! -f /etc/ssl/mail/dhparams.pem ]; then
-        openssl dhparam -out /etc/ssl/mail/dhparams.pem 2048
+# Certificates are operator-managed and mounted read-only. Fail clearly instead
+# of attempting to generate an untrusted replacement inside the container.
+for required in mail.crt mail.key dhparams.pem; do
+    if [ ! -s "/etc/ssl/mail/$required" ]; then
+        echo "Required TLS file missing: /etc/ssl/mail/$required" >&2
+        exit 1
     fi
-fi
+done
+
+# Refresh the pinned certificate used by internal Sieve submission.
+/usr/local/bin/update-relay-cert
 
 # Ensure vmail directory exists
 mkdir -p /var/vmail
