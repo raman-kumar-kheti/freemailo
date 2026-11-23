@@ -48,7 +48,7 @@ export class AdminService {
       data: {
         name: domainName,
         isActive: true,
-        dkimSelector: "mailhive",
+        dkimSelector: "freemailo",
       },
     });
 
@@ -56,7 +56,7 @@ export class AdminService {
     await this.provisioning.enqueueJob(ProvisionJobType.CREATE_DOMAIN, {
       domainId: domain.id,
       domainName: domain.name,
-      selector: "mailhive",
+      selector: "freemailo",
     });
 
     await this.logAudit(
@@ -150,7 +150,7 @@ export class AdminService {
   async getDomainDnsRecords(id: string) {
     const domain = await this.getDomain(id);
     const mailHost = process.env.MAIL_HOSTNAME || "mail.example.test";
-    const selector = domain.dkimSelector || "mailhive";
+    const selector = domain.dkimSelector || "freemailo";
 
     return {
       domain: domain.name,
@@ -233,7 +233,7 @@ export class AdminService {
 
     // Verify DKIM
     try {
-      const selector = domain.dkimSelector || "mailhive";
+      const selector = domain.dkimSelector || "freemailo";
       const dkimTxt = await resolveTxt(`${selector}._domainkey.${domain.name}`);
       const records = dkimTxt.map((parts) => parts.join(""));
       dkimVerified =

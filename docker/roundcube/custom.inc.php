@@ -1,5 +1,5 @@
 <?php
-// Roundcube custom overrides for MailHive development
+// Roundcube custom overrides for FreeMailo development
 $config['imap_conn_options'] = [
     'ssl' => [
         'verify_peer' => false,
@@ -17,4 +17,4 @@ $config['smtp_conn_options'] = [
 ];
 
 // Product name
-$config['product_name'] = 'MailHive Webmail (Dev)';
+$config['product_name'] = 'FreeMailo Webmail (Dev)';

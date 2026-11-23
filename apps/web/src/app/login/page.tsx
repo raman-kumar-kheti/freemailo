@@ -41,7 +41,7 @@ export default function LoginPage() {
             <Mail className="w-7 h-7" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Sign in to MailHive
+            Sign in to FreeMailo
           </h1>
           <p className="text-xs text-muted-foreground">
             Enter your mailbox credentials to access your email
@@ -122,7 +122,7 @@ export default function LoginPage() {
         </form>
 
         <div className="pt-4 border-t border-border text-center text-xs text-muted-foreground">
-          <span>MailHive Self-Hosted Platform</span>
+          <span>FreeMailo Self-Hosted Platform</span>
         </div>
       </div>
     </main>

@@ -1,4 +1,4 @@
-name: MailHive checks
+name: FreeMailo checks
 on:
   push:
   pull_request:
@@ -50,8 +50,8 @@ jobs:
         run: cd apps/web && npx playwright test --workers=1
       - name: Backup and isolated restoration
         run: |
-          ./scripts/backup.sh /tmp/mailhive-ci-backup
-          ./scripts/test-restore-isolated.sh /tmp/mailhive-ci-backup
+          ./scripts/backup.sh /tmp/freemailo-ci-backup
+          ./scripts/test-restore-isolated.sh /tmp/freemailo-ci-backup
       - name: Failure diagnostics
         if: failure()
         run: docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml logs --tail=100
@@ -103,6 +103,6 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ghcr.io/${{ env.IMAGE_NAMESPACE }}/mailhive-${{ matrix.service }}:${{ github.ref_name }}
+          tags: ghcr.io/${{ env.IMAGE_NAMESPACE }}/freemailo-${{ matrix.service }}:${{ github.ref_name }}
           provenance: true
           sbom: true

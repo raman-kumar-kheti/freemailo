@@ -8,7 +8,7 @@ from email.utils import formatdate, make_msgid
 message = EmailMessage()
 message['From'] = 'alice@example.test'
 message['To'] = 'bob@example.test'
-message['Subject'] = 'MailHive GTUBE rejection check'
+message['Subject'] = 'FreeMailo GTUBE rejection check'
 message['Date'] = formatdate(localtime=True)
 message['Message-ID'] = make_msgid(domain='example.test')
 message.set_content('XJS*C4JDBQADN1.NSBN3*2IDNEN*GTUBE-STANDARD-ANTI-UBE-TEST-EMAIL*C.34X')

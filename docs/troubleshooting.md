@@ -6,11 +6,11 @@ Start with the failed request's status and request ID, then the relevant daemon 
 
 ```bash
 curl --fail http://127.0.0.1:4000/api/health
-docker logs --tail 100 mailhive-api
-docker logs --tail 100 mailhive-dovecot
-docker logs --tail 100 mailhive-postfix
-docker logs --tail 100 mailhive-rspamd
-docker exec mailhive-postfix postqueue -p
+docker logs --tail 100 freemailo-api
+docker logs --tail 100 freemailo-dovecot
+docker logs --tail 100 freemailo-postfix
+docker logs --tail 100 freemailo-rspamd
+docker exec freemailo-postfix postqueue -p
 ```
 
 Health covers PostgreSQL, Redis, SMTP/IMAP connectivity and the Rspamd HTTP ping. A healthy listener does not establish successful authentication or external delivery. The admin system page shows the same health information. Do not delete the mail queue to resolve a transport failure; inspect the queue ID and underlying error first.
@@ -22,17 +22,17 @@ The confirmed incident involved imported Maildir filenames with `S=500` but only
 The API now preserves the original error and the Dovecot configuration contains `maildir_broken_filename_sizes = yes`. Back up the affected mailbox before repair, verify the running configuration contains that setting, then resync only the affected folder:
 
 ```bash
-docker exec mailhive-dovecot doveconf maildir_broken_filename_sizes
-docker exec mailhive-dovecot doveadm force-resync -u user@yourdomain.com INBOX
+docker exec freemailo-dovecot doveconf maildir_broken_filename_sizes
+docker exec freemailo-dovecot doveadm force-resync -u user@yourdomain.com INBOX
 ```
 
 Never generate test mail by inventing size suffixes in Maildir filenames; use SMTP or IMAP APPEND. A 401 means session expiry/account authorization, while a 503 normally indicates unavailable infrastructure. Inspect the request ID and server logs before attempting data repair.
 
 ## Authentication or submission failures
 
-Use interactive `docker exec -it mailhive-dovecot doveadm auth test user@yourdomain.com` so the password is prompted rather than placed in shell history. Check that both mailbox and domain are active, credentials are current, and the certificate matches `MAIL_HOSTNAME`.
+Use interactive `docker exec -it freemailo-dovecot doveadm auth test user@yourdomain.com` so the password is prompted rather than placed in shell history. Check that both mailbox and domain are active, credentials are current, and the certificate matches `MAIL_HOSTNAME`.
 
-After restarting/replacing Dovecot, run `docker exec mailhive-postfix postfix reload` to close cached SASL connections. A temporary 454 after a daemon restart can be a stale auth connection. Do not automatically resend a message if the API reported SMTP acceptance but a failed Sent copy; that message may already be delivered.
+After restarting/replacing Dovecot, run `docker exec freemailo-postfix postfix reload` to close cached SASL connections. A temporary 454 after a daemon restart can be a stale auth connection. Do not automatically resend a message if the API reported SMTP acceptance but a failed Sent copy; that message may already be delivered.
 
 For vacation replies, check Dovecot Sieve logs and the user's active script. Global spam routing is separate from IMAP-only training scripts. Replies use internal certificate-authorized TLS on 2525. After certificate changes run the renewal hook to refresh Postfix's allowed fingerprint. Do not publish that internal port or replace its certificate authorization with network-wide relay permission.
 
@@ -43,10 +43,10 @@ Inspect `/admin/jobs` for the actual failure and job state. The worker needs UID
 For domain lookups, the correct map is:
 
 ```bash
-docker exec mailhive-postfix postmap -q yourdomain.com pgsql:/etc/postfix/pgsql-virtual-domains.cf
+docker exec freemailo-postfix postmap -q yourdomain.com pgsql:/etc/postfix/pgsql-virtual-domains.cf
 ```
 
-A disabled/deleted domain or mailbox is intentionally unavailable. Check DKIM selector `mailhive`, the key file permissions and the exact public key in DNS. Never paste private keys into tickets.
+A disabled/deleted domain or mailbox is intentionally unavailable. Check DKIM selector `freemailo`, the key file permissions and the exact public key in DNS. Never paste private keys into tickets.
 
 ## Spam, quotas and rate limits
 

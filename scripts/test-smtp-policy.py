@@ -21,7 +21,7 @@ with smtplib.SMTP('127.0.0.1', 587, timeout=10) as smtp:
     assert code == 250, (code,reply)
     smtp.rset()
 
-ip = subprocess.check_output(['docker','inspect','--format','{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}','mailhive-postfix'], text=True).split()[0]
+ip = subprocess.check_output(['docker','inspect','--format','{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}','freemailo-postfix'], text=True).split()[0]
 with smtplib.SMTP_SSL(ip, 2525, context=context, timeout=10) as smtp:
     smtp.ehlo('mail.example.test')
     smtp.mail('')

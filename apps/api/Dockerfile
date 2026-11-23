@@ -15,7 +15,7 @@ RUN npm prune --omit=dev
 FROM node:24.15-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production PORT=4000
-RUN apk add --no-cache openssl && addgroup -g 5000 mailhive && adduser -D -u 5000 -G mailhive mailhive
+RUN apk add --no-cache openssl && addgroup -g 5000 freemailo && adduser -D -u 5000 -G freemailo freemailo
 COPY --from=production-deps --chown=5000:5000 /app/node_modules ./node_modules
 COPY --from=builder --chown=5000:5000 /app/dist ./dist
 COPY --from=builder --chown=5000:5000 /app/prisma ./prisma

@@ -9,7 +9,7 @@ async function request(path, token, body, method = body ? 'POST' : 'GET') {
   return response.status === 204 ? {} : response.json();
 }
 (async () => {
-  const admin = await request('/auth/admin/login', null, { email: process.env.TEST_ADMIN_EMAIL || 'admin@mailhive.local', password: process.env.TEST_ADMIN_PASSWORD || 'admin123456' });
+  const admin = await request('/auth/admin/login', null, { email: process.env.TEST_ADMIN_EMAIL || 'admin@freemailo.local', password: process.env.TEST_ADMIN_PASSWORD || 'admin123456' });
   const domain = (await request('/admin/domains?pageSize=100', admin.accessToken)).data.find(d => d.name === 'example.test');
   if (!domain) throw new Error('Development example.test domain required');
   const localPart = `load-${Date.now()}`;

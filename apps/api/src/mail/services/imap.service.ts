@@ -113,7 +113,7 @@ export class ImapService {
    * List IMAP folders with message counts
    */
   async listFolders(email: string): Promise<FolderDto[]> {
-    const cacheKey = `mailhive:folders:${email}`;
+    const cacheKey = `freemailo:folders:${email}`;
     const redis = this.redisService.getClient();
 
     const cached = await redis.get(cacheKey);
@@ -185,7 +185,7 @@ export class ImapService {
    */
   async invalidateFoldersCache(email: string): Promise<void> {
     const redis = this.redisService.getClient();
-    await redis.del(`mailhive:folders:${email}`);
+    await redis.del(`freemailo:folders:${email}`);
   }
 
   /**
@@ -275,8 +275,8 @@ export class ImapService {
               isStarred: flags.includes("\\Flagged"),
               hasAttachments,
               labels: flags
-                .filter((flag) => flag.startsWith("MailHive_"))
-                .map((flag) => flag.slice(9)),
+                .filter((flag) => flag.startsWith("FreeMailo_") || flag.startsWith("MailHive_"))
+                .map((flag) => flag.startsWith("FreeMailo_") ? flag.slice(10) : flag.slice(9)),
               size: msg.size || 0,
             });
           }
@@ -744,7 +744,7 @@ export class ImapService {
             else if (key === "has" && val === "attachment")
               attachmentsOnly = true;
             else if (key === "label")
-              searchCriteria.keyword = `MailHive_${val}`;
+              searchCriteria.keyword = `FreeMailo_${val}`;
             else if (key === "is") {
               if (val === "unread") searchCriteria.unseen = true;
               else if (val === "read") searchCriteria.seen = true;
@@ -848,8 +848,8 @@ export class ImapService {
               isStarred: flags.includes("\\Flagged"),
               hasAttachments: this.checkHasAttachments(msg.bodyStructure),
               labels: flags
-                .filter((flag) => flag.startsWith("MailHive_"))
-                .map((flag) => flag.slice(9)),
+                .filter((flag) => flag.startsWith("FreeMailo_") || flag.startsWith("MailHive_"))
+                .map((flag) => flag.startsWith("FreeMailo_") ? flag.slice(10) : flag.slice(9)),
               size: msg.size || 0,
             });
           }

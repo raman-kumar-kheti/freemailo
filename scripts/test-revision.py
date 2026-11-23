@@ -9,7 +9,7 @@ BASE = 'http://127.0.0.1:4000/api'
 
 def login(email, password):
     session = requests.Session()
-    session.headers['X-Requested-With'] = 'MailHive'
+    session.headers['X-Requested-With'] = 'FreeMailo'
     response = session.post(BASE + '/auth/login', json={'email': email, 'password': password}, timeout=15)
     response.raise_for_status()
     return session
@@ -61,7 +61,7 @@ def main():
     # Two concurrent refreshes may consume a token only once.
     refresh = alice.cookies.get('refresh_token')
     def rotate(_):
-        return requests.post(BASE + '/auth/refresh', cookies={'refresh_token':refresh}, headers={'X-Requested-With':'MailHive'}, timeout=15).status_code
+        return requests.post(BASE + '/auth/refresh', cookies={'refresh_token':refresh}, headers={'X-Requested-With':'FreeMailo'}, timeout=15).status_code
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(rotate, range(2))) == [200, 401]
     check(bob.post(BASE + '/auth/logout'), 204)

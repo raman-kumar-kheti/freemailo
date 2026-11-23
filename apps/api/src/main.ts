@@ -67,9 +67,9 @@ async function bootstrap() {
 
   // OpenAPI / Swagger Documentation
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("MailHive API")
+    .setTitle("FreeMailo API")
     .setDescription(
-      "Self-hosted mail and administration API. Browser sessions use HttpOnly cookies; cookie-authenticated mutations require X-Requested-With: MailHive.",
+      "Self-hosted mail and administration API. Browser sessions use HttpOnly cookies; cookie-authenticated mutations require X-Requested-With: FreeMailo.",
     )
     .setVersion("1.0.0")
     .addBearerAuth()
@@ -85,7 +85,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
-  logger.log(`🚀 MailHive API listening on port ${port}`);
+  logger.log(`🚀 FreeMailo API listening on port ${port}`);
   logger.log(
     `📖 Swagger API docs available at http://localhost:${port}/api/docs`,
   );

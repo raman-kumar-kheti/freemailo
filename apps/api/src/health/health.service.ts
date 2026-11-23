@@ -23,24 +23,24 @@ export class HealthService {
     this.registry = new client.Registry();
     client.collectDefaultMetrics({
       register: this.registry,
-      prefix: "mailhive_",
+      prefix: "freemailo_",
     });
 
     this.httpRequestsTotal = new client.Counter({
-      name: "mailhive_http_requests_total",
-      help: "Total HTTP requests handled by MailHive API",
+      name: "freemailo_http_requests_total",
+      help: "Total HTTP requests handled by FreeMailo API",
       labelNames: ["method", "path", "status"],
       registers: [this.registry],
     });
 
     this.mailboxesGauge = new client.Gauge({
-      name: "mailhive_mailboxes_total",
+      name: "freemailo_mailboxes_total",
       help: "Total number of active mailboxes",
       registers: [this.registry],
     });
 
     this.domainsGauge = new client.Gauge({
-      name: "mailhive_domains_total",
+      name: "freemailo_domains_total",
       help: "Total number of hosted domains",
       registers: [this.registry],
     });

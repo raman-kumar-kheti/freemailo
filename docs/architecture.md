@@ -1,4 +1,4 @@
-# MailHive architecture
+# FreeMailo architecture
 
 Implementation review: 2026-11-21. This document describes the current single-host Compose application. The original eight-phase brief is the target, not evidence that every feature or production control is complete. See [application-review.md](application-review.md) for acceptance results and gaps.
 

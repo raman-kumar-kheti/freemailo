@@ -6,9 +6,9 @@ test.describe("Phase 5: Admin Dashboard & DNS Tooling E2E", () => {
   }) => {
     // 1. Admin Login
     await page.goto("/admin/login");
-    await expect(page.locator("h1")).toContainText("MailHive Admin Console");
+    await expect(page.locator("h1")).toContainText("FreeMailo Admin Console");
 
-    await page.fill("#admin-email", "admin@mailhive.local");
+    await page.fill("#admin-email", "admin@freemailo.local");
     await page.fill("#admin-password", "admin123456");
     await page.click('button[type="submit"]');
 

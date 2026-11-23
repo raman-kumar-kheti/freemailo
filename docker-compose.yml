@@ -1,5 +1,5 @@
 ###############################################################################
-# MailHive – Production Docker Compose
+# FreeMailo – Production Docker Compose
 # Usage:  docker compose up -d
 # Dev:    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ###############################################################################
@@ -24,7 +24,7 @@ services:
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
-    container_name: mailhive-postgres
+    container_name: freemailo-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -46,7 +46,7 @@ services:
   # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    container_name: mailhive-redis
+    container_name: freemailo-redis
     command: >
       redis-server
         --requirepass ${REDIS_PASSWORD}
@@ -72,7 +72,7 @@ services:
   postfix:
     build:
       context: ./docker/postfix
-    container_name: mailhive-postfix
+    container_name: freemailo-postfix
     healthcheck:
       test: ["CMD-SHELL", "postfix status"]
       interval: 30s
@@ -86,7 +86,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
-      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-freemailo_master}
       DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
@@ -110,7 +110,7 @@ services:
   dovecot:
     build:
       context: ./docker/dovecot
-    container_name: mailhive-dovecot
+    container_name: freemailo-dovecot
     healthcheck:
       test: ["CMD", "doveadm", "service", "status"]
       interval: 30s
@@ -124,7 +124,7 @@ services:
       RSPAMD_PASSWORD: ${RSPAMD_PASSWORD}
       MAIL_HOSTNAME: ${MAIL_HOSTNAME}
       MAIL_DOMAIN: ${MAIL_DOMAIN}
-      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-freemailo_master}
       DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
     volumes:
       - vmail:/var/vmail
@@ -143,7 +143,7 @@ services:
   rspamd:
     build:
       context: ./docker/rspamd
-    container_name: mailhive-rspamd
+    container_name: freemailo-rspamd
     ports:
       - "127.0.0.1:11334:11334"          # Web UI only; milter (11332) stays internal
     environment:
@@ -165,7 +165,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    container_name: mailhive-api
+    container_name: freemailo-api
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -193,7 +193,7 @@ services:
       MAIL_DOMAIN: ${MAIL_DOMAIN}
       POSTFIX_HOST: postfix
       DOVECOT_HOST: dovecot
-      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-mailhive_master}
+      DOVECOT_MASTER_USER: ${DOVECOT_MASTER_USER:-freemailo_master}
       DOVECOT_MASTER_PASSWORD: ${DOVECOT_MASTER_PASSWORD:?Set DOVECOT_MASTER_PASSWORD}
     volumes:
       - vmail:/var/vmail
@@ -218,7 +218,7 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    container_name: mailhive-web
+    container_name: freemailo-web
     ports:
       - "3000:3000"
     environment:

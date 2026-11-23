@@ -6,14 +6,14 @@ This is a single-host Compose deployment. The local acceptance results are recor
 
 Use a Linux host with Docker Compose, a static public IP, outbound port 25, sufficient SSD capacity and working authoritative DNS. Start with 4 CPU cores and 4–8 GiB RAM; size disk and backups for the actual quotas. Provision a reverse proxy for webmail HTTPS. Do not publish the internal API, databases, Rspamd controller, LMTP or Dovecot auth ports. Docker port publishing can bypass host firewall rules: use provider firewall rules and Docker-aware filtering.
 
-Copy `.env.example` to `.env`. Set `POSTGRES_DB=mailhive` and `POSTGRES_USER=mailhive` (the daemon SQL maps currently use these names). Generate distinct secrets with `openssl rand -hex 32`. Set `DATABASE_URL` to the `postgres` Compose hostname and URL-encode any non-hex password. Never use `.env.dev` on a public server.
+Copy `.env.example` to `.env`. Set `POSTGRES_DB=freemailo` and `POSTGRES_USER=freemailo` (the daemon SQL maps currently use these names). Generate distinct secrets with `openssl rand -hex 32`. Set `DATABASE_URL` to the `postgres` Compose hostname and URL-encode any non-hex password. Never use `.env.dev` on a public server.
 
 Required production settings:
 
 - `APP_URL=https://webmail.yourdomain.com` — exact browser origin; comma-separated origins are supported.
 - `MAIL_HOSTNAME=mail.yourdomain.com`, `MAIL_DOMAIN=yourdomain.com`.
 - `JWT_SECRET` (32+ characters), `JWT_ACCESS_EXPIRY=15m`, `JWT_REFRESH_EXPIRY=7d`.
-- Unique `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `RSPAMD_PASSWORD`, `DOVECOT_MASTER_PASSWORD`; optional `DOVECOT_MASTER_USER` defaults to `mailhive_master`.
+- Unique `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `RSPAMD_PASSWORD`, `DOVECOT_MASTER_PASSWORD`; optional `DOVECOT_MASTER_USER` defaults to `freemailo_master`.
 - `MAIL_TLS_REJECT_UNAUTHORIZED=true`, `MAIL_TLS_SERVERNAME=mail.yourdomain.com`, `COOKIE_SECURE=true`.
 
 The API rejects insecure production cookie/TLS settings and missing secrets. For a private mail CA, mount a CA bundle into the API and set `NODE_EXTRA_CA_CERTS` in its Compose environment. The development override explicitly permits the local self-signed certificate and HTTP cookies.

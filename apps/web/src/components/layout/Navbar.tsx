@@ -55,18 +55,20 @@ export function Navbar({
   }, [query]);
   useEffect(() => {
     const dark =
-      localStorage.getItem("mailhive-theme") === "dark" ||
-      (!localStorage.getItem("mailhive-theme") &&
+      (localStorage.getItem("freemailo-theme") ||
+        localStorage.getItem("mailhive-theme")) === "dark" ||
+      (!localStorage.getItem("freemailo-theme") &&
+        !localStorage.getItem("mailhive-theme") &&
         matchMedia("(prefers-color-scheme: dark)").matches);
     setIsDark(dark);
     document.documentElement.classList.toggle("dark", dark);
   }, []);
   const toggleTheme = () => {
     document.documentElement.classList.toggle("dark", !isDark);
-    localStorage.setItem("mailhive-theme", isDark ? "light" : "dark");
+    localStorage.setItem("freemailo-theme", isDark ? "light" : "dark");
     setIsDark(!isDark);
   };
-  const initials = (user?.displayName || user?.email || "MH")
+  const initials = (user?.displayName || user?.email || "FM")
     .split(/[\s@]+/)
     .slice(0, 2)
     .map((part) => part[0])
@@ -86,15 +88,15 @@ export function Navbar({
           </IconButton>
           <Link
             href="/"
-            aria-label="MailHive home"
+            aria-label="FreeMailo home"
             className="flex items-center gap-2.5 rounded-lg"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
               <Mail size={21} strokeWidth={1.8} />
             </span>
             <span className="text-[23px] font-semibold tracking-[-1px]">
-              Mail
-              <span className="font-normal text-muted-foreground">Hive</span>
+              Free
+              <span className="font-normal text-muted-foreground">Mailo</span>
             </span>
           </Link>
         </div>

@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 
-LABEL maintainer="MailHive <admin@mailhive.io>"
-LABEL description="Rspamd spam filtering system for MailHive email platform"
+LABEL maintainer="FreeMailo <admin@freemailo.io>"
+LABEL description="Rspamd spam filtering system for FreeMailo email platform"
 
 ENV DEBIAN_FRONTEND=noninteractive
 

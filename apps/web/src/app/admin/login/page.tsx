@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@mailhive.local');
+  const [email, setEmail] = useState('admin@freemailo.local');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +39,7 @@ export default function AdminLoginPage() {
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 mx-auto flex items-center justify-center text-white shadow-xl">
             <ShieldCheck className="w-7 h-7" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">MailHive Admin Console</h1>
+          <h1 className="text-2xl font-bold tracking-tight">FreeMailo Admin Console</h1>
           <p className="text-xs text-zinc-400">
             Sign in with administrative privileges to manage domains and mailboxes
           </p>
@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@mailhive.local"
+                placeholder="admin@freemailo.local"
                 className="w-full h-11 pl-10 pr-4 rounded-xl border border-zinc-700 bg-zinc-800/80 focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 focus:outline-none text-sm text-white placeholder-zinc-500 transition-all"
               />
             </div>
@@ -108,7 +108,7 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="pt-4 border-t border-zinc-800 text-center text-xs text-zinc-500">
-          MailHive Infrastructure Administration
+          FreeMailo Infrastructure Administration
         </div>
       </div>
     </div>

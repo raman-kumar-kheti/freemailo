@@ -1,9 +1,9 @@
 # =============================================================================
-# MailHive – Postfix main.cf
+# FreeMailo – Postfix main.cf
 # =============================================================================
 
 # General
-smtpd_banner = $myhostname ESMTP MailHive
+smtpd_banner = $myhostname ESMTP FreeMailo
 biff = no
 disable_vrfy_command = yes
 append_dot_mydomain = no

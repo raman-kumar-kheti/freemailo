@@ -18,7 +18,7 @@ describe("HTTP security boundaries", () => {
       "POST",
       undefined,
       { access_token: "token" },
-      { "x-requested-with": "MailHive" },
+      { "x-requested-with": "FreeMailo" },
       true,
     ],
     ["POST", undefined, {}, { authorization: "Bearer token" }, true],

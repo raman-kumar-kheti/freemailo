@@ -24,7 +24,7 @@ def check(r):
     return r.json() if r.content else None
 
 s = requests.Session()
-s.headers['X-Requested-With'] = 'MailHive'
+s.headers['X-Requested-With'] = 'FreeMailo'
 check(s.post(BASE+'/auth/login', json={'email':'bob@example.test','password':'bob123456'},timeout=15))
 subject = 'Learning regression '+str(time.time_ns())
 check(s.post(BASE+'/mail/send', json={'to':['bob@example.test'],'subject':subject,'textBody':'Our project meeting covers plans for the coming week. Please review the agenda and bring your comments about deployment, storage, documentation, monitoring, mail delivery, team schedules and customer feedback. We will discuss those topics and agree on the next steps together.'},timeout=20))

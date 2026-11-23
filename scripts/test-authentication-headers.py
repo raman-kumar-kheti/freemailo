@@ -9,7 +9,7 @@ import requests
 
 BASE = 'http://127.0.0.1:4000/api'
 session = requests.Session()
-session.headers['X-Requested-With'] = 'MailHive'
+session.headers['X-Requested-With'] = 'FreeMailo'
 session.post(BASE + '/auth/login', json={'email': 'bob@example.test', 'password': 'bob123456'}, timeout=15).raise_for_status()
 
 for port in (25, 587):
@@ -21,7 +21,7 @@ for port in (25, 587):
     message['Date'] = formatdate(localtime=True)
     message['Message-ID'] = make_msgid(domain='example.test')
     for issuer in ('attacker.invalid', 'mail.example.test'):
-        message['Authentication-Results'] = f'{issuer}; spf=pass; dkim=pass; dmarc=pass (forged-mailhive-result)'
+        message['Authentication-Results'] = f'{issuer}; spf=pass; dkim=pass; dmarc=pass (forged-freemailo-result)'
     message.set_content('Local authentication header regression check.')
     with smtplib.SMTP('127.0.0.1', port, timeout=15) as smtp:
         smtp.ehlo('mail.example.test')
@@ -45,7 +45,7 @@ for port in (25, 587):
     detail.raise_for_status()
     raw = session.get(BASE + f'/mail/messages/{uid}/raw', timeout=15)
     raw.raise_for_status()
-    assert 'forged-mailhive-result' not in raw.text, f'Untrusted result survived port {port}'
+    assert 'forged-freemailo-result' not in raw.text, f'Untrusted result survived port {port}'
     header = detail.json()['headers'].get('authentication-results', '')
     expected_issuer = 'mail.example.test' if port == 25 else 'ORIGINATING'
     assert header.startswith(expected_issuer + ';'), f'Missing local result: {header}'

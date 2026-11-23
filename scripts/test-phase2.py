@@ -15,14 +15,14 @@ def run_phase2_verification():
     print("                PHASE 2 - BACKEND ACCEPTANCE TESTS                ")
     print("==================================================================")
     session = requests.Session()
-    session.headers.update({"X-Requested-With": "MailHive"})
+    session.headers.update({"X-Requested-With": "FreeMailo"})
 
     # -------------------------------------------------------------------------
     # TEST 1: Admin Login
     # -------------------------------------------------------------------------
     print("\n--- Test 1: Admin Authentication (POST /api/auth/admin/login) ---")
     res = session.post(f"{BASE_URL}/api/auth/admin/login", json={
-        "email": "admin@mailhive.local",
+        "email": "admin@freemailo.local",
         "password": "admin123456"
     })
     if res.status_code != 200:
@@ -196,7 +196,7 @@ def run_phase2_verification():
         print(f"✅ Retrieved message: '{parsed.get('Subject')}' from '{parsed.get('From')}'")
         signature = parsed.get('DKIM-Signature', '')
         assert re.search(r'(?:^|;)\s*d=' + re.escape(new_domain['name']) + r'(?:;|\s|$)', signature), 'Outbound message missing the provisioned domain DKIM signature'
-        assert re.search(r'(?:^|;)\s*s=mailhive(?:;|\s|$)', signature), 'Unexpected DKIM selector'
+        assert re.search(r'(?:^|;)\s*s=(?:freemailo|mailhive)(?:;|\s|$)', signature), 'Unexpected DKIM selector'
         print('✅ Real delivered MIME contains the provisioned domain DKIM signature (public DNS verification is a deployment check).')
         imap.logout()
     except Exception as e:

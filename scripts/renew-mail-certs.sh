@@ -11,6 +11,6 @@ install -m 600 "$LINEAGE/privkey.pem" "$CERT_DIR/mail.key.new"
 install -m 644 "$LINEAGE/fullchain.pem" "$CERT_DIR/mail.crt.new"
 mv "$CERT_DIR/mail.key.new" "$CERT_DIR/mail.key"
 mv "$CERT_DIR/mail.crt.new" "$CERT_DIR/mail.crt"
-docker exec mailhive-postfix /usr/local/bin/update-relay-cert
-docker exec mailhive-postfix postfix reload
-docker exec mailhive-dovecot doveadm reload
+docker exec freemailo-postfix /usr/local/bin/update-relay-cert
+docker exec freemailo-postfix postfix reload
+docker exec freemailo-dovecot doveadm reload

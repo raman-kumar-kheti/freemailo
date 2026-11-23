@@ -15,7 +15,7 @@ export function masterAuth(email: string) {
   const password = process.env.DOVECOT_MASTER_PASSWORD;
   if (!password) throw new Error("DOVECOT_MASTER_PASSWORD must be configured");
   return {
-    user: `${email}*${process.env.DOVECOT_MASTER_USER || "mailhive_master"}`,
+    user: `${email}*${process.env.DOVECOT_MASTER_USER || "freemailo_master"}`,
     pass: password,
   };
 }

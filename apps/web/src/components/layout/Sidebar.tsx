@@ -177,7 +177,7 @@ export function Sidebar({
         </button>
         {!compact && (
           <p className="mt-4 text-[11px] text-muted-foreground">
-            MailHive · Self-hosted webmail
+            FreeMailo · Self-hosted webmail
           </p>
         )}
       </div>
@@ -204,7 +204,7 @@ export function Sidebar({
           >
             <div className="flex items-center justify-between px-6 py-4">
               <Dialog.Title className="text-lg font-semibold">
-                MailHive
+                FreeMailo
               </Dialog.Title>
               <Dialog.Close asChild>
                 <IconButton label="Close navigation">

@@ -180,7 +180,7 @@ export class ProvisioningProcessor extends WorkerHost {
     selector?: string;
   }) {
     const { domainId, domainName } = data;
-    const selector = data.selector || "mailhive";
+    const selector = data.selector || "freemailo";
 
     this.logger.log(
       `Generating DKIM keys for ${domainName} with selector ${selector}...`,
@@ -197,17 +197,22 @@ export class ProvisioningProcessor extends WorkerHost {
       privateKey = await fs.readFile(keyFile, "utf8");
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
-      const existing = await this.prisma.domain.findUniqueOrThrow({
-        where: { id: domainId },
-      });
-      // Preserve the existing published key on retries and migrate legacy DB keys.
-      privateKey =
-        existing.dkimPrivateKey ||
-        crypto.generateKeyPairSync("rsa", {
-          modulusLength: 2048,
-          publicKeyEncoding: { type: "spki", format: "pem" },
-          privateKeyEncoding: { type: "pkcs8", format: "pem" },
-        }).privateKey;
+      const legacyKeyFile = path.join(directory, `${domainName}.mailhive.key`);
+      try {
+        privateKey = await fs.readFile(legacyKeyFile, "utf8");
+      } catch {
+        const existing = await this.prisma.domain.findUniqueOrThrow({
+          where: { id: domainId },
+        });
+        // Preserve the existing published key on retries and migrate legacy DB keys.
+        privateKey =
+          existing.dkimPrivateKey ||
+          crypto.generateKeyPairSync("rsa", {
+            modulusLength: 2048,
+            publicKeyEncoding: { type: "spki", format: "pem" },
+            privateKeyEncoding: { type: "pkcs8", format: "pem" },
+          }).privateKey;
+      }
       try {
         await fs.writeFile(keyFile, privateKey, { mode: 0o640, flag: "wx" });
       } catch (writeError) {
@@ -227,8 +232,8 @@ export class ProvisioningProcessor extends WorkerHost {
       this.logger.warn(`Failed to write DKIM public key file: ${pubErr.message}`);
     }
     // Fixed selector avoids a shared mutable selector map and survives restarts.
-    if (selector !== "mailhive")
-      throw new Error("Only the mailhive DKIM selector is supported");
+    if (selector !== "freemailo" && selector !== "mailhive")
+      throw new Error("Only freemailo and mailhive DKIM selectors are supported");
     await this.prisma.domain.update({
       where: { id: domainId },
       data: {

@@ -13,12 +13,12 @@ async function main() {
   })}`;
 
   const admin = await prisma.adminUser.upsert({
-    where: { email: 'admin@mailhive.local' },
+    where: { email: 'admin@freemailo.local' },
     update: {},
     create: {
-      email: 'admin@mailhive.local',
+      email: 'admin@freemailo.local',
       passwordHash: adminPasswordHash,
-      displayName: 'MailHive Admin',
+      displayName: 'FreeMailo Admin',
       role: AdminRole.SUPER_ADMIN,
     },
   });
@@ -36,7 +36,7 @@ async function main() {
       spfVerified: false,
       dkimVerified: false,
       dmarcVerified: false,
-      dkimSelector: 'mailhive',
+      dkimSelector: 'freemailo',
     },
   });
   console.log(`  ✅ Domain: ${domain.name}`);
@@ -127,7 +127,7 @@ async function main() {
 
   console.log('\n✨ Seed complete!');
   console.log('\nTest credentials:');
-  console.log('  Admin:  admin@mailhive.local / admin123456');
+  console.log('  Admin:  admin@freemailo.local / admin123456');
   console.log('  Alice:  alice@example.test / alice123456');
   console.log('  Bob:    bob@example.test / bob123456');
 }

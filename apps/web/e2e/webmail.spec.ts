@@ -1,10 +1,10 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("MailHive Gmail-Style Webmail UI E2E Flows", () => {
+test.describe("FreeMailo Gmail-Style Webmail UI E2E Flows", () => {
   test("Flow 1: Authentication, Layout, and Navigation", async ({ page }) => {
     // 1. Visit Login Page
     await page.goto("/login");
-    await expect(page.locator("h1")).toContainText("Sign in to MailHive");
+    await expect(page.locator("h1")).toContainText("Sign in to FreeMailo");
 
     // Check accessibility: form inputs must have labels
     await expect(
@@ -25,7 +25,7 @@ test.describe("MailHive Gmail-Style Webmail UI E2E Flows", () => {
     // 4. Verify Navbar components
     await expect(page.locator("header")).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "MailHive home" }),
+      page.getByRole("link", { name: "FreeMailo home" }),
     ).toBeVisible();
     await expect(page.locator("#global-search-input")).toBeVisible();
 
@@ -55,7 +55,7 @@ test.describe("MailHive Gmail-Style Webmail UI E2E Flows", () => {
     await page.fill('input[placeholder="Subject"]', "Bob Welcome Message");
     await page
       .getByRole("textbox", { name: "Message body" })
-      .fill("Welcome to MailHive webmail!");
+      .fill("Welcome to FreeMailo webmail!");
     await page.click('button[type="submit"]:has-text("Send")');
 
     // Wait for message to appear in list

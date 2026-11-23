@@ -58,7 +58,7 @@ const messages = subjects.map((subject, index) => ({
 async function fixture(page: Page) {
   const writes: { path: string; method: string; body: any }[] = [];
   await page.addInitScript(() =>
-    localStorage.setItem("mailhive-theme", "light"),
+    localStorage.setItem("freemailo-theme", "light"),
   );
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -286,7 +286,7 @@ test("starred and bulk label actions address the correct mailbox", async ({
     .poll(() =>
       writes
         .filter((write) => write.path.endsWith("/flags"))
-        .some((write) => write.body.flags.includes("MailHive_label-projects")),
+        .some((write) => write.body.flags.includes("FreeMailo_label-projects")),
     )
     .toBe(true);
   await page.getByRole("button", { name: "Projects", exact: true }).click();
@@ -306,7 +306,7 @@ test("mobile navigation, settings and compose fit and remain accessible", async 
   await audit(page);
   await page.screenshot({ path: "test-results/redesign-mobile.png" });
   await page.getByRole("button", { name: "Toggle navigation" }).click();
-  await expect(page.getByRole("dialog", { name: "MailHive" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "FreeMailo" })).toBeVisible();
   await audit(page);
   await page.getByRole("button", { name: "Compose", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "New message" })).toBeVisible();

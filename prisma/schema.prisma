@@ -1,4 +1,4 @@
-// MailHive - Prisma Schema
+// FreeMailo - Prisma Schema
 // This is the source of truth for all application data.
 // Postfix and Dovecot read from this database via SQL lookup maps.
 
@@ -66,7 +66,7 @@ model Domain {
   dmarcVerified Boolean @default(false)
 
   // DKIM key material
-  dkimSelector   String? /// e.g., "mailhive" or "20261120"
+  dkimSelector   String? /// e.g., "freemailo" or "20261120"
   dkimPrivateKey String? /// Legacy key field; new provisioning stores private keys only in the protected DKIM volume
   dkimPublicKey  String? /// For DNS TXT record display
 

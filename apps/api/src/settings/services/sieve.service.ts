@@ -104,7 +104,9 @@ export class SieveService {
         .split("\r\n")
         .some(
           (line) =>
-            / ACTIVE$/.test(line) && !line.startsWith('"mailhive-vacation"'),
+            / ACTIVE$/.test(line) &&
+            !line.startsWith('"freemailo-vacation"') &&
+            !line.startsWith('"mailhive-vacation"'),
         );
       if (otherActive)
         throw new ConflictException(
@@ -113,9 +115,9 @@ export class SieveService {
       if (dto.isActive) {
         await response(
           socket,
-          `PUTSCRIPT "mailhive-vacation" {${Buffer.byteLength(script)}+}\r\n${script}`,
+          `PUTSCRIPT "freemailo-vacation" {${Buffer.byteLength(script)}+}\r\n${script}`,
         );
-        await response(socket, 'SETACTIVE "mailhive-vacation"');
+        await response(socket, 'SETACTIVE "freemailo-vacation"');
       } else {
         await response(socket, 'SETACTIVE ""');
       }

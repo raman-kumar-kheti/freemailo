@@ -28,7 +28,7 @@ describe("IMAP label search for the webmail UI", () => {
             subject: "Project update",
             from: [{ name: "Maya", address: "maya@example.test" }],
           },
-          flags: new Set(["MailHive_label-projects", "\\Flagged"]),
+          flags: new Set(["FreeMailo_label-projects", "\\Flagged"]),
           size: 100,
         };
       }),
@@ -43,7 +43,7 @@ describe("IMAP label search for the webmail UI", () => {
       2,
     );
     expect(client.search).toHaveBeenCalledWith(
-      { keyword: "MailHive_label-projects", unseen: true },
+      { keyword: "FreeMailo_label-projects", unseen: true },
       { uid: true },
     );
     expect(client.fetch.mock.calls[0][0]).toBe("2,1");

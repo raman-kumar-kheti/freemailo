@@ -160,7 +160,7 @@ export default function DomainsAdminPage() {
                     </span>
                   </td>
                   <td className="py-3.5 px-4 font-mono text-zinc-400">
-                    {dom.dkimSelector || 'mailhive'}
+                    {dom.dkimSelector || 'freemailo'}
                   </td>
                   <td className="py-3.5 px-4 text-zinc-500">
                     {new Date(dom.createdAt).toLocaleDateString()}
@@ -318,7 +318,7 @@ export default function DomainsAdminPage() {
                     </div>
                     <div className="space-y-1.5 text-[11px] text-zinc-300">
                       <div><span className="text-zinc-500">Type:</span> TXT</div>
-                      <div><span className="text-zinc-500">Host:</span> {dnsData?.dkim?.host || `mailhive._domainkey.${activeDnsDomain?.name}`}</div>
+                      <div><span className="text-zinc-500">Host:</span> {dnsData?.dkim?.host || `freemailo._domainkey.${activeDnsDomain?.name}`}</div>
                       <div className="p-2 bg-zinc-900 rounded border border-zinc-800 text-[10px] break-all">
                         {dnsData?.dkim?.value || 'Loading DKIM public key...'}
                       </div>

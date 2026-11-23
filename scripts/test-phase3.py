@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MailHive Phase 3 Acceptance Verification Script.
+FreeMailo Phase 3 Acceptance Verification Script.
 Tests all Mail API endpoints, IMAP operations, outbound SMTP, drafts, flags, search, settings, and SSE.
 """
 

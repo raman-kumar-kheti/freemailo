@@ -1026,9 +1026,9 @@ paths:
       tags:
       - Health & Observability
 info:
-  title: MailHive API
+  title: FreeMailo API
   description: 'Self-hosted mail and administration API. Browser sessions use HttpOnly
-    cookies; cookie-authenticated mutations require X-Requested-With: MailHive.'
+    cookies; cookie-authenticated mutations require X-Requested-With: FreeMailo.'
   version: 1.0.0
   contact: {}
 tags:

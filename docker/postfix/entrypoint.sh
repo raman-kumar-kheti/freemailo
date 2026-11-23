@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 MailHive Postfix starting..."
+echo "🚀 FreeMailo Postfix starting..."
 
 # Substitute environment variables into config files
 sed -i "s|MAIL_HOSTNAME_PLACEHOLDER|${MAIL_HOSTNAME}|g" /etc/postfix/main.cf

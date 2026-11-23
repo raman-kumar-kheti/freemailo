@@ -112,7 +112,10 @@ export default function MailboxApp() {
       .finally(() => setAuthChecking(false));
     const updateOnline = () => setOffline(!navigator.onLine);
     updateOnline();
-    setCollapsed(localStorage.getItem("mailhive-sidebar") === "collapsed");
+    setCollapsed(
+      (localStorage.getItem("freemailo-sidebar") ||
+        localStorage.getItem("mailhive-sidebar")) === "collapsed",
+    );
     window.addEventListener("online", updateOnline);
     window.addEventListener("offline", updateOnline);
     return () => {
@@ -384,7 +387,7 @@ export default function MailboxApp() {
     try {
       const labelId = labels.find((item) => item.name === label)?.id;
       if (!labelId) throw new Error("This label is no longer available.");
-      const keyword = `MailHive_${labelId}`;
+      const keyword = `FreeMailo_${labelId}`;
       await api.updateFlags(sourceFolder, uids, [keyword], "add");
       setNotice({ text: `Label “${label}” applied.` });
       void loadMessages();
@@ -523,7 +526,7 @@ export default function MailboxApp() {
           else {
             setCollapsed(!collapsed);
             localStorage.setItem(
-              "mailhive-sidebar",
+              "freemailo-sidebar",
               collapsed ? "expanded" : "collapsed",
             );
           }

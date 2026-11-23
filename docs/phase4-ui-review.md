@@ -2,9 +2,9 @@
 
 > Follow-up: the backend failure and several integration gaps below were addressed in the [application revision](application-review.md). This document records the earlier UI-only review.
 
-MailHive now has a Gmail-inspired mailbox layout with its own teal identity, persistent light/dark theme, collapsible sidebar, mobile navigation drawer, compact/comfortable rows, clear unread and selected states, and responsive reading and compose views. The work follows the repository's `ui-ux-pro-max` and `ui-styling` skills.
+FreeMailo now has a Gmail-inspired mailbox layout with its own teal identity, persistent light/dark theme, collapsible sidebar, mobile navigation drawer, compact/comfortable rows, clear unread and selected states, and responsive reading and compose views. The work follows the repository's `ui-ux-pro-max` and `ui-styling` skills.
 
-![MailHive inbox, populated with test-only mailbox data](ui-review/inbox-light.png)
+![FreeMailo inbox, populated with test-only mailbox data](ui-review/inbox-light.png)
 
 [Dark theme](ui-review/inbox-dark.png) · [Mobile](ui-review/inbox-mobile.png) · [Compose](ui-review/compose.png) · [Reading view](ui-review/reading.png)
 
@@ -13,7 +13,7 @@ MailHive now has a Gmail-inspired mailbox layout with its own teal identity, per
 - Normalized `/auth/me`: the existing API returns a user directly, while the old frontend expected `{ user }`. This mismatch prevented the authenticated mailbox from loading.
 - Rebuilt the shell, folder navigation, search, account menu, message list, reading pane, compose panel, and modal presentation. Radix dialogs and menus provide dismissal, focus management, and keyboard behavior. All controls have names and visible focus states.
 - Added retryable errors, offline feedback, loading skeletons, unread filtering, selection, move and label actions, and pagination that ignores stale responses after folder changes.
-- Fixed actions from Starred/search to use their backing INBOX folder. Labels use stable IMAP keywords (`MailHive_<label id>`), remain assigned after renames, and can be created, renamed, recolored, deleted, applied, and searched. The UI resolves label names to IDs; the API now exposes those IDs in list/search responses and searches the keyword.
+- Fixed actions from Starred/search to use their backing INBOX folder. Labels use stable IMAP keywords (`FreeMailo_<label id>`), remain assigned after renames, and can be created, renamed, recolored, deleted, applied, and searched. The UI resolves label names to IDs; the API now exposes those IDs in list/search responses and searches the keyword.
 - Implemented the advertised `j/k`, `r/a/f`, and `g i` shortcuts alongside compose/search/star/archive/delete/help. Shortcuts do not run while typing or using an overlay.
 - Replaced the plain textarea with [TipTap](https://tiptap.dev/docs/editor/getting-started/install/react): bold, italic, underline, lists, links, undo, signature insertion, contact suggestions, Cc/Bcc, attachment selection/drop, and minimize/maximize controls.
 - Serialized draft saves, saved on close, implemented discard, and reopened Drafts messages in the editor using their existing UID. New compose sessions start clean. Failed saves keep the editor open. Attachments remain in the open/minimized editor until sending because the current draft endpoint does not persist files.

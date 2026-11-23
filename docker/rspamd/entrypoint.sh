@@ -2,13 +2,13 @@
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# MailHive Rspamd Entrypoint
+# FreeMailo Rspamd Entrypoint
 # ---------------------------------------------------------------------------
 # Generates hashed passwords, substitutes secrets into config files,
 # prepares DKIM directories, and launches Rspamd in the foreground.
 # ---------------------------------------------------------------------------
 
-RSPAMD_PASSWORD="${RSPAMD_PASSWORD:-mailhive}"
+RSPAMD_PASSWORD="${RSPAMD_PASSWORD:-freemailo}"
 REDIS_PASSWORD="${REDIS_PASSWORD:-}"
 
 CONFIG_DIR="/etc/rspamd/local.d"
@@ -47,20 +47,20 @@ if [ ! -f "${DKIM_SELECTORS_MAP}" ]; then
   echo "[entrypoint] Created empty dkim_selectors.map."
 fi
 
-if [ ! -f "${DKIM_DIR}/example.test.mailhive.key" ]; then
-  echo "[entrypoint] Generating default DKIM key for example.test (selector: mailhive)..."
-  rspamadm dkim_keygen -d example.test -s mailhive -k "${DKIM_DIR}/example.test.mailhive.key" > "${DKIM_DIR}/example.test.mailhive.pub"
+if [ ! -f "${DKIM_DIR}/example.test.freemailo.key" ]; then
+  echo "[entrypoint] Generating default DKIM key for example.test (selector: freemailo)..."
+  rspamadm dkim_keygen -d example.test -s freemailo -k "${DKIM_DIR}/example.test.freemailo.key" > "${DKIM_DIR}/example.test.freemailo.pub"
 fi
 
 # Ensure default selector mapping exists
 if ! grep -q "example.test" "${DKIM_SELECTORS_MAP}"; then
-  echo "example.test mailhive" >> "${DKIM_SELECTORS_MAP}"
-  echo "[entrypoint] Added example.test -> mailhive to dkim_selectors.map."
+  echo "example.test freemailo" >> "${DKIM_SELECTORS_MAP}"
+  echo "[entrypoint] Added example.test -> freemailo to dkim_selectors.map."
 fi
 
 # Fallback: also provide dkim selector key link
 if [ ! -f "${DKIM_DIR}/example.test.dkim.key" ]; then
-  ln -sf "${DKIM_DIR}/example.test.mailhive.key" "${DKIM_DIR}/example.test.dkim.key"
+  ln -sf "${DKIM_DIR}/example.test.freemailo.key" "${DKIM_DIR}/example.test.dkim.key"
 fi
 
 # --- 4. Fix ownership -----------------------------------------------------
@@ -78,8 +78,8 @@ chmod 640 "${CONFIG_DIR}/worker-controller.inc"
 echo "[entrypoint] Permissions set."
 
 # The API worker (UID/GID 5000) writes keys without Docker socket access.
-getent group mailhive-keys >/dev/null || groupadd -g 5000 mailhive-keys
-usermod -a -G mailhive-keys _rspamd
+getent group freemailo-keys >/dev/null || groupadd -g 5000 freemailo-keys
+usermod -a -G freemailo-keys _rspamd
 chgrp 5000 /var/lib/rspamd
 chmod 750 /var/lib/rspamd
 chgrp -R 5000 "${DKIM_DIR}"

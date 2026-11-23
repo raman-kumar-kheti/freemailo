@@ -1,8 +1,8 @@
 {
-  "name": "mailhive-api",
+  "name": "freemailo-api",
   "version": "1.0.0",
-  "description": "MailHive NestJS Backend API",
-  "author": "MailHive",
+  "description": "FreeMailo NestJS Backend API",
+  "author": "FreeMailo",
   "private": true,
   "license": "MIT",
   "scripts": {

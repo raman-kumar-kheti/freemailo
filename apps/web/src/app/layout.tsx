@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MailHive - Production Webmail',
+  title: 'FreeMailo - Production Webmail',
   description: 'Self-hosted, Gmail-inspired multi-domain email hosting platform',
 };
 

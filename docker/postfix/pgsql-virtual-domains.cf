@@ -1,5 +1,5 @@
 hosts = postgres
-user = mailhive
+user = freemailo
 password = POSTGRES_PASSWORD_PLACEHOLDER
-dbname = mailhive
+dbname = freemailo
 query = SELECT name FROM domains WHERE name='%s' AND "isActive" = true AND "deletedAt" IS NULL

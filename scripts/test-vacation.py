@@ -6,7 +6,7 @@ import requests
 BASE = 'http://127.0.0.1:4000/api'
 def session(path, email, password):
     s = requests.Session()
-    s.headers['X-Requested-With'] = 'MailHive'
+    s.headers['X-Requested-With'] = 'FreeMailo'
     response = s.post(BASE + path, json={'email':email, 'password':password}, timeout=15)
     response.raise_for_status()
     return s
@@ -15,7 +15,7 @@ def checked(response):
     response.raise_for_status()
     return response.json() if response.content else None
 
-admin = session('/auth/admin/login', 'admin@mailhive.local', 'admin123456')
+admin = session('/auth/admin/login', 'admin@freemailo.local', 'admin123456')
 bob = session('/auth/login', 'bob@example.test', 'bob123456')
 domains = checked(admin.get(BASE + '/admin/domains'))['data']
 domain = next(d for d in domains if d['name'] == 'example.test')

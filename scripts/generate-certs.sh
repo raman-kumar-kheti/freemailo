@@ -25,7 +25,7 @@ openssl req -x509 -nodes -days 3650 \
   -newkey rsa:4096 \
   -keyout "$CERT_DIR/mail.key" \
   -out "$CERT_DIR/mail.crt" \
-  -subj "/C=US/ST=State/L=City/O=MailHive/CN=$MAIL_CERT_HOSTNAME" \
+  -subj "/C=US/ST=State/L=City/O=FreeMailo/CN=$MAIL_CERT_HOSTNAME" \
   -addext "subjectAltName=DNS:$MAIL_CERT_HOSTNAME,DNS:*.$MAIL_CERT_HOSTNAME,DNS:localhost"
 
 # DH parameters for Postfix

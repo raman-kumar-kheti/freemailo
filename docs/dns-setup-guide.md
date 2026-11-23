@@ -1,6 +1,6 @@
-# MailHive DNS & Deliverability Setup Guide 📡
+# FreeMailo DNS & Deliverability Setup Guide 📡
 
-This guide provides step-by-step instructions for properly configuring DNS records for your domains hosted on MailHive to achieve 10/10 mail deliverability scores and avoid spam filters (Google Gmail, Microsoft Outlook, Apple Mail).
+This guide provides step-by-step instructions for properly configuring DNS records for your domains hosted on FreeMailo to achieve 10/10 mail deliverability scores and avoid spam filters (Google Gmail, Microsoft Outlook, Apple Mail).
 
 ---
 
@@ -11,9 +11,9 @@ For any hosted domain (e.g. `yourdomain.com`) served by mail server hostname `ma
 | Record Type | Host / Name | Value / Target | Priority / TTL | Purpose |
 |-------------|-------------|----------------|----------------|---------|
 | **A** | `mail.yourdomain.com` | `203.0.113.10` | 3600 | Hostname resolution for SMTP & IMAP |
-| **MX** | `@` (or `yourdomain.com`) | `mail.yourdomain.com.` | 10 | Directs inbound emails to MailHive Postfix |
+| **MX** | `@` (or `yourdomain.com`) | `mail.yourdomain.com.` | 10 | Directs inbound emails to FreeMailo Postfix |
 | **TXT (SPF)** | `@` (or `yourdomain.com`) | `v=spf1 mx ~all` (or `v=spf1 ip4:203.0.113.10 ~all`) | 3600 | Authorizes your server IP to send mail |
-| **TXT (DKIM)**| `mailhive._domainkey` | `v=DKIM1; k=rsa; p=<PUBLIC_KEY>` | 3600 | Cryptographic signature verification |
+| **TXT (DKIM)**| `freemailo._domainkey` | `v=DKIM1; k=rsa; p=<PUBLIC_KEY>` | 3600 | Cryptographic signature verification |
 | **TXT (DMARC)**| `_dmarc` | `v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@yourdomain.com; pct=100` | 3600 | DMARC policy enforcement and reporting |
 | **PTR (rDNS)**| `203.0.113.10` (ISP/Host) | `mail.yourdomain.com.` | Managed by VPS | Reverse DNS validation (mandatory for Gmail/Yahoo) |
 | **TXT (MTA-STS)**| `_mta-sts` | `v=STSv1; id=20261120T120000Z` | 86400 | Enforces TLS connection security |
@@ -22,13 +22,13 @@ For any hosted domain (e.g. `yourdomain.com`) served by mail server hostname `ma
 
 ## 🔑 1. DKIM (DomainKeys Identified Mail)
 
-MailHive automatically generates a 2048-bit RSA key pair for each domain added through the Admin Console (`/admin/domains`).
+FreeMailo automatically generates a 2048-bit RSA key pair for each domain added through the Admin Console (`/admin/domains`).
 
-1. Log into MailHive Admin at `http://your-server:3000/admin`.
+1. Log into FreeMailo Admin at `http://your-server:3000/admin`.
 2. Navigate to **Domains** and click **DNS Setup** on your domain.
 3. Copy the **DKIM Public Key** record.
 4. Add a `TXT` record at your DNS provider:
-   - **Name / Host:** `mailhive._domainkey` (or `mailhive._domainkey.yourdomain.com`)
+   - **Name / Host:** `freemailo._domainkey` (or `freemailo._domainkey.yourdomain.com`)
    - **Type:** `TXT`
    - **Value:** `v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...`
 
@@ -93,7 +93,7 @@ Most major mail providers (Gmail, Outlook, Yahoo) **reject connection attempts i
 1. Go to Cloudflare Dashboard → **DNS** → **Records**.
 2. Add `A` record for `mail` pointing to your IP. **Ensure Proxy Status is DNS Only (Grey Cloud)**. Proxied mail traffic (Orange Cloud) will break SMTP and IMAP connections.
 3. Add `MX` record pointing to `mail.yourdomain.com`.
-4. Add `TXT` record for SPF (`@`) and DKIM (`mailhive._domainkey`).
+4. Add `TXT` record for SPF (`@`) and DKIM (`freemailo._domainkey`).
 
 ### AWS Route 53
 1. Hosted Zones → Select domain → **Create record**.
@@ -105,6 +105,6 @@ Most major mail providers (Gmail, Outlook, Yahoo) **reject connection attempts i
 ## 🔍 Deliverability Verification Tools
 
 After publishing your DNS records, verify your deliverability score using:
-1. **Mail-Tester:** Send a test email from MailHive webmail to `test-xxxx@mail-tester.com` to get a 10/10 deliverability report.
+1. **Mail-Tester:** Send a test email from FreeMailo webmail to `test-xxxx@mail-tester.com` to get a 10/10 deliverability report.
 2. **MXToolbox SuperTool:** `https://mxtoolbox.com/SuperTool.aspx` to test MX, SPF, DKIM, and SMTP Banner.
 3. **Google Postmaster Tools:** Register your domain at `https://postmaster.google.com` to monitor sender reputation and spam rate.

@@ -76,7 +76,7 @@ export default function AdminLayout({
             </div>
             <div>
               <span className="font-bold text-sm tracking-tight text-white block">
-                MailHive
+                FreeMailo
               </span>
               <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block">
                 Admin Console
@@ -135,7 +135,7 @@ export default function AdminLayout({
         <header className="h-16 border-b border-zinc-800 bg-zinc-900/40 px-8 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-zinc-400">
             <span className="font-semibold text-zinc-200">
-              MailHive Cluster:
+              FreeMailo Cluster:
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/20">
               HEALTHY • 100% POSTFIX/DOVECOT
@@ -144,7 +144,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             <div className="text-right">
               <span className="text-xs font-semibold text-zinc-200 block">
-                {adminUser?.email || "admin@mailhive.local"}
+                {adminUser?.email || "admin@freemailo.local"}
               </span>
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
                 Super Admin

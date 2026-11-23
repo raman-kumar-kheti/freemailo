@@ -15,7 +15,7 @@ export function csrfProtection(
   if (
     (req.cookies?.access_token || req.cookies?.refresh_token) &&
     !req.get("authorization") &&
-    req.get("x-requested-with") !== "MailHive"
+    !["FreeMailo", "MailHive"].includes(req.get("x-requested-with") || "")
   ) {
     return res.status(403).json({ message: "CSRF protection header required" });
   }

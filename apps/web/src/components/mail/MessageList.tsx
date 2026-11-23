@@ -446,7 +446,7 @@ export function MessageList({
             ? `${selectedUids.length} messages selected on this page`
             : "Select messages to organize your mailbox"}
         </span>
-        <span>MailHive</span>
+        <span>FreeMailo</span>
       </div>
     </section>
   );

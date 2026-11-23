@@ -1,4 +1,4 @@
-// API Client for MailHive Webmail
+// API Client for FreeMailo Webmail
 
 const API_BASE = "/api";
 
@@ -81,6 +81,7 @@ class ApiClient {
 
   constructor() {
     if (typeof window !== "undefined") {
+      localStorage.removeItem("freemailo_token");
       localStorage.removeItem("mailhive_token");
     }
   }
@@ -89,6 +90,7 @@ class ApiClient {
     // Browser authentication uses HTTP-only cookies; never retain JWTs in JS.
     this.token = null;
     if (typeof window !== "undefined") {
+      localStorage.removeItem("freemailo_token");
       localStorage.removeItem("mailhive_token");
     }
   }
@@ -103,7 +105,7 @@ class ApiClient {
     retry = true,
   ): Promise<T> {
     const headers: Record<string, string> = {
-      "X-Requested-With": "MailHive",
+      "X-Requested-With": "FreeMailo",
       ...(options.headers as Record<string, string>),
     };
 
@@ -133,7 +135,7 @@ class ApiClient {
         this.refreshing = fetch(`${API_BASE}/auth/refresh`, {
           method: "POST",
           credentials: "include",
-          headers: { "X-Requested-With": "MailHive" },
+          headers: { "X-Requested-With": "FreeMailo" },
         })
           .then(async (response) => {
             if (!response.ok) return false;
@@ -463,7 +465,7 @@ class ApiClient {
     });
     this.setToken(data.accessToken);
     if (typeof window !== "undefined") {
-      localStorage.setItem("mailhive_admin_user", JSON.stringify(data.user));
+      localStorage.setItem("freemailo_admin_user", JSON.stringify(data.user));
     }
     return data;
   }

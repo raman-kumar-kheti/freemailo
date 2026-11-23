@@ -1,6 +1,6 @@
 # Dovecot SQL configuration for PostgreSQL
 driver = pgsql
-connect = host=postgres dbname=mailhive user=mailhive password=POSTGRES_PASSWORD_PLACEHOLDER
+connect = host=postgres dbname=freemailo user=freemailo password=POSTGRES_PASSWORD_PLACEHOLDER
 
 default_pass_scheme = ARGON2ID
 

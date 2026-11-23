@@ -42,8 +42,8 @@ Run the integration commands only against the private development stack: they cr
 | `cd apps/web && npx playwright test --workers=1` | 16 passed in 37.7 seconds on the rebuilt app. Live login/webmail Axe checks reported no critical/serious violations; email iframe excluded. |
 | `npm --prefix apps/api audit` and `npm --prefix apps/web audit` | Both report zero findings as of 2026-11-21. This does not cover OS packages or future advisories. |
 | `node scripts/test-mail-load.cjs` | 2026-11-20 run: 10,000 messages, 20 list requests, p95 108 ms, maximum 645 ms, IDLE notification 517 ms. Isolated mailbox archived afterward. Single-host development result, not concurrent-tenant capacity. |
-| `./scripts/backup.sh /tmp/mailhive-release-backup` | Format-3 snapshot `20261121_150541`; all five archive/database checksums passed. Writers restarted afterward. |
-| `./scripts/test-restore-isolated.sh /tmp/mailhive-release-backup` | Restored 12 mailbox records into disposable PostgreSQL and verified Maildir, Rspamd/DKIM, queue and Redis archive bytes. Live volumes untouched. |
+| `./scripts/backup.sh /tmp/freemailo-release-backup` | Format-3 snapshot `20261121_150541`; all five archive/database checksums passed. Writers restarted afterward. |
+| `./scripts/test-restore-isolated.sh /tmp/freemailo-release-backup` | Restored 12 mailbox records into disposable PostgreSQL and verified Maildir, Rspamd/DKIM, queue and Redis archive bytes. Live volumes untouched. |
 | `docker compose ... up -d --wait` and `GET /api/health` | All seven services healthy after maintenance; PostgreSQL, Redis, SMTP, IMAP and Rspamd checks up. HTTP metrics populated. |
 
 The retained [Lighthouse summary](ui-review/lighthouse-summary.json) and [report](ui-review/lighthouse.html) are from 2026-11-20 with test-only populated mailbox fixtures. They are not a new live-backend Lighthouse run or a full WCAG certification. Tests are evidence of their stated coverage, not proof of absence of all defects.

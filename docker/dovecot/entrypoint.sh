@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🚀 MailHive Dovecot starting..."
+echo "🚀 FreeMailo Dovecot starting..."
 
 # Substitute environment variables
 sed -i "s|POSTGRES_PASSWORD_PLACEHOLDER|${POSTGRES_PASSWORD}|g" /etc/dovecot/dovecot-sql.conf.ext
@@ -16,7 +16,7 @@ chown root:root /etc/dovecot/dovecot-sql.conf.ext
 # Configure master user for webmail API access
 : "${DOVECOT_MASTER_PASSWORD:?DOVECOT_MASTER_PASSWORD is required}"
 MASTER_USER_HASH=$(doveadm pw -s SHA512-CRYPT -p "${DOVECOT_MASTER_PASSWORD}")
-echo "${DOVECOT_MASTER_USER:-mailhive_master}:${MASTER_USER_HASH}" > /etc/dovecot/master-users
+echo "${DOVECOT_MASTER_USER:-freemailo_master}:${MASTER_USER_HASH}" > /etc/dovecot/master-users
 chown root:dovecot /etc/dovecot/master-users
 chmod 640 /etc/dovecot/master-users
 
