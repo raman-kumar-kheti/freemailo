@@ -10,7 +10,8 @@ Copy `.env.example` to `.env`. Set `POSTGRES_DB=freemailo` and `POSTGRES_USER=fr
 
 Required production settings:
 
-- `APP_URL=https://webmail.yourdomain.com` — exact browser origin; comma-separated origins are supported.
+- `ALLOWED_ORIGINS=https://mail.yourdomain.com,https://webmail.yourdomain.com` — allowed browser origins for CORS & CSRF; comma-separated.
+- `APP_URL=https://mail.yourdomain.com` — primary public webmail application URL.
 - `MAIL_HOSTNAME=mail.yourdomain.com`, `MAIL_DOMAIN=yourdomain.com`.
 - `JWT_SECRET` (32+ characters), `JWT_ACCESS_EXPIRY=15m`, `JWT_REFRESH_EXPIRY=7d`.
 - Unique `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `RSPAMD_PASSWORD`, `DOVECOT_MASTER_PASSWORD`; optional `DOVECOT_MASTER_USER` defaults to `freemailo_master`.

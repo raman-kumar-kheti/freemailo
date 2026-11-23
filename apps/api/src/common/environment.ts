@@ -1,3 +1,5 @@
+import { getAllowedOrigins } from "./security";
+
 export function validateEnvironment(env: Record<string, unknown>) {
   if (typeof env.JWT_SECRET !== "string" || env.JWT_SECRET.length < 32)
     throw new Error("JWT_SECRET must contain at least 32 characters");
@@ -14,15 +16,13 @@ export function validateEnvironment(env: Record<string, unknown>) {
       throw new Error(
         "Production requires secure cookies and verified mail TLS",
       );
+    const origins = getAllowedOrigins();
     if (
-      typeof env.APP_URL !== "string" ||
-      !env.APP_URL.split(",")
-        .map((url) => url.trim())
-        .filter(Boolean)
-        .every((url) => /^https:\/\//.test(url))
+      origins.length === 0 ||
+      !origins.every((url) => /^https:\/\//.test(url))
     )
       throw new Error(
-        "APP_URL must contain explicit HTTPS origins in production",
+        "ALLOWED_ORIGINS (or APP_URL) must contain explicit HTTPS origins in production",
       );
     if (/change.?me|dev_|example/i.test(env.JWT_SECRET))
       throw new Error("Replace the example JWT secret before production");
