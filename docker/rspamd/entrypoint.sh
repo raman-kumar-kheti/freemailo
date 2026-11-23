@@ -85,6 +85,7 @@ chmod 750 /var/lib/rspamd
 chgrp -R 5000 "${DKIM_DIR}"
 chmod 2770 "${DKIM_DIR}"
 find "${DKIM_DIR}" -type f -name '*.key' -exec chmod 640 {} \;
+find "${DKIM_DIR}" -type f -name '*.pub' -exec chmod 644 {} \;
 
 # --- 5. Launch Rspamd in the foreground -----------------------------------
 echo "[entrypoint] Starting Rspamd..."

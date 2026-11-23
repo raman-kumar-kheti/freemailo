@@ -219,6 +219,13 @@ export class ProvisioningProcessor extends WorkerHost {
       .createPublicKey(privateKey)
       .export({ type: "spki", format: "der" })
       .toString("base64");
+    const pubFile = path.join(directory, `${domainName}.${selector}.pub`);
+    const pubRecord = `${selector}._domainkey IN TXT ( "v=DKIM1; k=rsa;"\n\t"p=${pubKeyClean}" ) ;\n`;
+    try {
+      await fs.writeFile(pubFile, pubRecord, { mode: 0o644, flag: "w" });
+    } catch (pubErr: any) {
+      this.logger.warn(`Failed to write DKIM public key file: ${pubErr.message}`);
+    }
     // Fixed selector avoids a shared mutable selector map and survives restarts.
     if (selector !== "mailhive")
       throw new Error("Only the mailhive DKIM selector is supported");
