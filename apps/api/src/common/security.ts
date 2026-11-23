@@ -1,5 +1,19 @@
 import { NextFunction, Request, Response } from "express";
 
+/**
+ * Returns an array of allowed browser origins parsed from process.env.APP_URL
+ * Defaults to local development origins if not configured.
+ */
+export function getAllowedOrigins(): string[] {
+  const raw =
+    process.env.APP_URL ||
+    "http://localhost:3000,http://127.0.0.1:3000,http://127.0.0.1:3001";
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 // Browsers attach Origin to unsafe cross-origin requests. Reject those before
 // cookie authentication; require a custom header on cookie-authenticated writes.
 export function csrfProtection(
@@ -9,7 +23,7 @@ export function csrfProtection(
 ) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("origin");
-  const allowed = (process.env.APP_URL || "http://localhost:3000").split(",");
+  const allowed = getAllowedOrigins();
   if (origin && !allowed.includes(origin))
     return res.status(403).json({ message: "Origin not allowed" });
   if (

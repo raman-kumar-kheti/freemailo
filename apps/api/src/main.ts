@@ -5,7 +5,7 @@ import helmet from "helmet";
 import * as cookieParser from "cookie-parser";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
 import { ResponseInterceptor } from "./common/response.interceptor";
-import { csrfProtection } from "./common/security";
+import { csrfProtection, getAllowedOrigins } from "./common/security";
 import { AppModule } from "./app.module";
 import { HealthService } from "./health/health.service";
 
@@ -57,9 +57,12 @@ async function bootstrap() {
     }),
   );
 
-  // CORS
+  // CORS (Allowed Origins Array)
+  const allowedOrigins = getAllowedOrigins();
+  logger.log(`🌐 Configured CORS allowed origins: ${allowedOrigins.join(", ")}`);
+
   app.enableCors({
-    origin: (process.env.APP_URL || "http://localhost:3000").split(","),
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],

@@ -16,7 +16,10 @@ export function validateEnvironment(env: Record<string, unknown>) {
       );
     if (
       typeof env.APP_URL !== "string" ||
-      !env.APP_URL.split(",").every((url) => /^https:\/\//.test(url))
+      !env.APP_URL.split(",")
+        .map((url) => url.trim())
+        .filter(Boolean)
+        .every((url) => /^https:\/\//.test(url))
     )
       throw new Error(
         "APP_URL must contain explicit HTTPS origins in production",
