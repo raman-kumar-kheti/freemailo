@@ -1,5 +1,7 @@
 # Phase 4 UI review — 20 November 2026
 
+> UI follow-up: [signup and admin consistency review — 24 November 2026](signup-admin-ui-review.md).
+
 > Follow-up: the backend failure and several integration gaps below were addressed in the [application revision](application-review.md). This document records the earlier UI-only review.
 
 FreeMailo now has a Gmail-inspired mailbox layout with its own teal identity, persistent light/dark theme, collapsible sidebar, mobile navigation drawer, compact/comfortable rows, clear unread and selected states, and responsive reading and compose views. The work follows the repository's `ui-ux-pro-max` and `ui-styling` skills.
