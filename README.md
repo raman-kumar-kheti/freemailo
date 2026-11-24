@@ -23,6 +23,7 @@ The development seed creates missing accounts without replacing existing passwor
 | --- | --- | --- |
 | Webmail | http://localhost:3000 | `alice@example.test` / `alice123456`, `bob@example.test` / `bob123456` |
 | Administration | http://localhost:3000/admin | `admin@freemailo.local` / `admin123456` |
+| Database Client (Adminer) | http://localhost:8080 | System: PostgreSQL, Server: `postgres`, User: `freemailo` |
 | API documentation | http://localhost:4000/api/docs | Bearer token or browser cookie session |
 | Health | http://localhost:4000/api/health | Reports DB, Redis, Postfix, Dovecot and Rspamd status |
 | Metrics | http://localhost:4000/api/metrics | Restrict access in production |

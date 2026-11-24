@@ -42,6 +42,23 @@ services:
       - appnet
 
   # ---------------------------------------------------------------------------
+  # Adminer – Database management web UI
+  # ---------------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: freemailo-adminer
+    ports:
+      - "${ADMINER_PORT:-127.0.0.1:8080}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  # ---------------------------------------------------------------------------
   # Redis – caching, BullMQ and Rspamd backend
   # ---------------------------------------------------------------------------
   redis:

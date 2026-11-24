@@ -29,6 +29,14 @@ services:
         -c log_min_duration_statement=1000
 
   # ---------------------------------------------------------------------------
+  # Adminer – Database client web UI for local development
+  # ---------------------------------------------------------------------------
+  adminer:
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: flat
+
+  # ---------------------------------------------------------------------------
   # Redis – expose to host for redis-cli / RedisInsight
   # ---------------------------------------------------------------------------
   redis:
