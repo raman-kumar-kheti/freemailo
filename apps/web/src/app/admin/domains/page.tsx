@@ -87,7 +87,7 @@ export default function DomainsAdminPage() {
     setLoadingDns(true);
     try {
       const data = await api.getDomainDns(domain.id);
-      setDnsData(data);
+      setDnsData(data.records || data);
     } catch (err: any) {
       notify(`Error loading DNS records: ${err.message}`, "error");
     } finally {
