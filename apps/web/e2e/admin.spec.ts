@@ -20,7 +20,7 @@ test.describe("Phase 5: Admin Dashboard & DNS Tooling E2E", () => {
     await expect(page.getByText("Infrastructure Health Matrix")).toBeVisible();
 
     // 3. Domains & DNS Tooling
-    await page.getByRole("button", { name: "Domains & DNS" }).click();
+    await page.getByRole("link", { name: "Domains & DNS" }).click();
     await expect(page).toHaveURL("/admin/domains");
     await expect(page.locator("h1")).toContainText("Domain Management");
 
@@ -57,7 +57,7 @@ test.describe("Phase 5: Admin Dashboard & DNS Tooling E2E", () => {
     await page.getByRole("button", { name: "Done" }).click();
 
     // 4. Mailboxes & Quotas
-    await page.getByRole("button", { name: "Mailboxes & Quota" }).click();
+    await page.getByRole("link", { name: "Mailboxes & Quota" }).click();
     await expect(page).toHaveURL("/admin/mailboxes");
     await expect(page.locator("h1")).toContainText("Mailbox Provisioning");
 
@@ -66,12 +66,12 @@ test.describe("Phase 5: Admin Dashboard & DNS Tooling E2E", () => {
     await expect(page.getByText("MB").first()).toBeVisible(); // Quota indicator
 
     // 5. Aliases & Forwarding
-    await page.getByRole("button", { name: "Aliases & Forwarding" }).click();
+    await page.getByRole("link", { name: "Aliases & Forwarding" }).click();
     await expect(page).toHaveURL("/admin/aliases");
     await expect(page.locator("h1")).toContainText("Aliases & Forwarding");
 
     // 6. BullMQ Provisioning Queue
-    await page.getByRole("button", { name: "Provisioning Queue" }).click();
+    await page.getByRole("link", { name: "Provisioning Queue" }).click();
     await expect(page).toHaveURL("/admin/jobs");
     await expect(page.locator("h1")).toContainText("BullMQ Provisioning Queue");
     await expect(
@@ -79,7 +79,7 @@ test.describe("Phase 5: Admin Dashboard & DNS Tooling E2E", () => {
     ).toBeVisible();
 
     // 7. Audit Trail
-    await page.getByRole("button", { name: "Audit Trail" }).click();
+    await page.getByRole("link", { name: "Audit Trail" }).click();
     await expect(page).toHaveURL("/admin/audit");
     await expect(page.locator("h1")).toContainText("System Audit Trail");
   });

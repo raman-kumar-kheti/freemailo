@@ -14,8 +14,11 @@ import {
   Search,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { Modal } from "@/components/ui/mail-ui";
+import { useAdminFeedback } from "@/components/admin/useAdminFeedback";
 
 export default function MailboxesAdminPage() {
+  const { notify, confirmAction, feedback } = useAdminFeedback();
   const [mailboxes, setMailboxes] = useState<any[]>([]);
   const [domains, setDomains] = useState<any[]>([]);
   const [selectedDomain, setSelectedDomain] = useState<string>("");
@@ -86,10 +89,13 @@ export default function MailboxesAdminPage() {
       setNewUsername("");
       setNewPassword("");
       setAddModalOpen(false);
-      alert(`Mailbox '${fullEmail}' provisioning job queued successfully!`);
+      notify(
+        `Mailbox '${fullEmail}' provisioning job queued successfully!`,
+        "success",
+      );
       loadMailboxes();
     } catch (err: any) {
-      alert(`Error creating mailbox: ${err.message}`);
+      notify(`Error creating mailbox: ${err.message}`, "error");
     } finally {
       setCreating(false);
     }
@@ -108,9 +114,9 @@ export default function MailboxesAdminPage() {
       setEditModalOpen(false);
       setResetPassword("");
       loadMailboxes();
-      alert("Mailbox updated successfully!");
+      notify("Mailbox updated successfully!", "success");
     } catch (err: any) {
-      alert(`Error updating mailbox: ${err.message}`);
+      notify(`Error updating mailbox: ${err.message}`, "error");
     } finally {
       setUpdating(false);
     }
@@ -118,16 +124,16 @@ export default function MailboxesAdminPage() {
 
   const handleDeleteMailbox = async (id: string, email: string) => {
     if (
-      !confirm(
+      !(await confirmAction(
         `Are you sure you want to delete mailbox '${email}'? Maildir will be marked for cleanup.`,
-      )
+      ))
     )
       return;
     try {
       await api.deleteAdminMailbox(id);
       loadMailboxes();
     } catch (err: any) {
-      alert(`Error deleting mailbox: ${err.message}`);
+      notify(`Error deleting mailbox: ${err.message}`, "error");
     }
   };
 
@@ -138,20 +144,20 @@ export default function MailboxesAdminPage() {
   );
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
+    <div className="admin-page space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Mailbox Provisioning
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
+          <p className="text-sm leading-6 text-muted-foreground mt-1.5">
             Manage virtual user mailboxes, storage quotas, and security
             credentials
           </p>
         </div>
         <button
           onClick={() => setAddModalOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-xs text-white shadow-lg shadow-indigo-600/30 transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary hover:opacity-90 font-semibold text-xs text-primary-foreground shadow-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add Mailbox
@@ -159,13 +165,19 @@ export default function MailboxesAdminPage() {
       </div>
 
       {/* Filters Bar */}
-      <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-card border border-border text-xs">
         <div className="flex items-center gap-3">
-          <span className="text-zinc-400 font-medium">Domain Filter:</span>
+          <label
+            htmlFor="mailbox-domain-filter"
+            className="text-muted-foreground font-medium"
+          >
+            Domain
+          </label>
           <select
+            id="mailbox-domain-filter"
             value={selectedDomain}
             onChange={(e) => setSelectedDomain(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-white focus:outline-none"
+            className="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground focus:outline-none"
           >
             <option value="">All Domains</option>
             {domains.map((d) => (
@@ -176,23 +188,30 @@ export default function MailboxesAdminPage() {
           </select>
         </div>
 
-        <div className="relative w-64">
-          <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
+            aria-label="Search mailboxes"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search mailboxes..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-white placeholder-zinc-500 text-xs focus:outline-none"
+            className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground placeholder:text-muted-foreground text-xs focus:outline-none"
           />
         </div>
       </div>
 
       {/* Mailboxes Table */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
-        <table className="w-full text-left text-xs">
+      <div
+        role="region"
+        aria-label="Mailboxes table"
+        tabIndex={0}
+        className="rounded-2xl border border-border bg-card overflow-x-auto shadow-sm"
+      >
+        <table className="w-full text-left text-sm">
+          <caption className="sr-only">Mailboxes list</caption>
           <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/80 text-zinc-400">
+            <tr className="border-b border-border bg-muted/50 text-muted-foreground">
               <th className="py-3 px-4 font-semibold">Mailbox Address</th>
               <th className="py-3 px-4 font-semibold">Domain</th>
               <th className="py-3 px-4 font-semibold">Quota Usage</th>
@@ -200,16 +219,22 @@ export default function MailboxesAdminPage() {
               <th className="py-3 px-4 font-semibold text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/60 text-zinc-200">
+          <tbody className="divide-y divide-border text-foreground">
             {loading ? (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-zinc-500">
+                <td
+                  colSpan={5}
+                  className="py-8 text-center text-muted-foreground"
+                >
                   Loading mailboxes...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-zinc-500">
+                <td
+                  colSpan={5}
+                  className="py-8 text-center text-muted-foreground"
+                >
                   No mailboxes found
                 </td>
               </tr>
@@ -230,18 +255,18 @@ export default function MailboxesAdminPage() {
                 return (
                   <tr
                     key={mb.id}
-                    className="hover:bg-zinc-800/40 transition-colors"
+                    className="hover:bg-muted/60 transition-colors"
                   >
-                    <td className="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-indigo-400" />
+                    <td className="py-3.5 px-4 font-semibold text-foreground">
+                      <Mail className="w-4 h-4 text-primary" />
                       {mb.email}
                     </td>
-                    <td className="py-3.5 px-4 font-mono text-zinc-400">
+                    <td className="py-3.5 px-4 font-mono text-muted-foreground">
                       {mb.domain?.name || mb.email.split("@")[1]}
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="w-48 space-y-1">
-                        <div className="flex justify-between text-[10px] text-zinc-400 font-mono">
+                        <div className="flex justify-between text-xs text-muted-foreground font-mono">
                           <span>
                             {usedMB === null
                               ? "Usage unavailable"
@@ -249,34 +274,36 @@ export default function MailboxesAdminPage() {
                           </span>
                           <span>{quotaMB} MB</span>
                         </div>
-                        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-indigo-500 rounded-full"
+                            className="h-full bg-primary rounded-full"
                             style={{ width: `${percent}%` }}
                           />
                         </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/20">
+                      <span className="px-2 py-0.5 rounded-full bg-accent text-primary text-xs font-bold border border-primary/15">
                         {mb.isActive ? "ACTIVE" : "SUSPENDED"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
+                    <td className="py-3.5 px-4 text-right space-x-2 whitespace-nowrap">
                       <button
                         onClick={() => {
                           setActiveMailbox(mb);
                           setEditQuotaMB(quotaMB);
                           setEditModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Edit Mailbox / Password"
                         title="Edit Mailbox / Password"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDeleteMailbox(mb.id, mb.email)}
-                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                        aria-label="Delete Mailbox"
                         title="Delete Mailbox"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -291,159 +318,167 @@ export default function MailboxesAdminPage() {
       </div>
 
       {/* Add Mailbox Modal */}
-      {addModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-white">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="font-bold text-sm">Provision New Mailbox</h3>
-              <button
-                onClick={() => setAddModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
+      <Modal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        title="Provision New Mailbox"
+        className="admin-dialog max-w-lg"
+      >
+        <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
+          <form onSubmit={handleCreateMailbox} className="space-y-4">
+            <div>
+              <label
+                htmlFor="mailbox-address"
+                className="block text-xs font-medium text-muted-foreground mb-1"
               >
-                <X className="w-4 h-4" />
+                Mailbox Address
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  required
+                  id="mailbox-address"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="username"
+                  className="min-w-0 w-full flex-1 px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+                />
+                <span className="text-muted-foreground">@</span>
+                <select
+                  aria-label="Mailbox domain"
+                  value={newDomainId}
+                  onChange={(e) => setNewDomainId(e.target.value)}
+                  className="min-w-0 max-w-[55%] px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+                >
+                  {domains.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="mailbox-password"
+                className="block text-xs font-medium text-muted-foreground mb-1"
+              >
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                id="mailbox-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min 8 characters"
+                className="w-full px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="mailbox-quota"
+                className="block text-xs font-medium text-muted-foreground mb-1"
+              >
+                Storage Quota (MB)
+              </label>
+              <input
+                type="number"
+                min="100"
+                step="1"
+                id="mailbox-quota"
+                value={newQuotaMB}
+                onChange={(e) => setNewQuotaMB(Number(e.target.value))}
+                className="w-full px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setAddModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={creating}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50"
+              >
+                {creating ? "Queueing..." : "Provision Mailbox"}
               </button>
             </div>
-            <form onSubmit={handleCreateMailbox} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Mailbox Address
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={newUsername}
-                    onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="username"
-                    className="flex-1 px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                  />
-                  <span className="text-zinc-500">@</span>
-                  <select
-                    value={newDomainId}
-                    onChange={(e) => setNewDomainId(e.target.value)}
-                    className="px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                  >
-                    {domains.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Min 8 characters"
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Storage Quota (MB)
-                </label>
-                <input
-                  type="number"
-                  min="100"
-                  step="100"
-                  value={newQuotaMB}
-                  onChange={(e) => setNewQuotaMB(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setAddModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
-                >
-                  {creating ? "Queueing..." : "Provision Mailbox"}
-                </button>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
-      )}
+      </Modal>
 
       {/* Edit Mailbox / Reset Password Modal */}
-      {editModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 text-white">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h3 className="font-bold text-sm">
-                Edit: {activeMailbox?.email}
-              </h3>
-              <button
-                onClick={() => setEditModalOpen(false)}
-                className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
+      <Modal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title={`Edit: ${activeMailbox?.email || "mailbox"}`}
+        className="admin-dialog max-w-lg"
+      >
+        <div className="min-h-0 overflow-y-auto p-5 sm:p-6">
+          <form onSubmit={handleUpdateMailbox} className="space-y-4">
+            <div>
+              <label
+                htmlFor="reset-password"
+                className="block text-xs font-medium text-muted-foreground mb-1"
               >
-                <X className="w-4 h-4" />
+                Reset Password (leave empty to keep current)
+              </label>
+              <input
+                type="password"
+                id="reset-password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                placeholder="New password..."
+                className="w-full px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="edit-quota"
+                className="block text-xs font-medium text-muted-foreground mb-1"
+              >
+                Quota Limit (MB)
+              </label>
+              <input
+                type="number"
+                min="100"
+                step="1"
+                id="edit-quota"
+                value={editQuotaMB}
+                onChange={(e) => setEditQuotaMB(Number(e.target.value))}
+                className="w-full px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground focus:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={updating}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:opacity-90 text-primary-foreground disabled:opacity-50"
+              >
+                {updating ? "Saving..." : "Save Changes"}
               </button>
             </div>
-            <form onSubmit={handleUpdateMailbox} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Reset Password (leave empty to keep current)
-                </label>
-                <input
-                  type="password"
-                  value={resetPassword}
-                  onChange={(e) => setResetPassword(e.target.value)}
-                  placeholder="New password..."
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Quota Limit (MB)
-                </label>
-                <input
-                  type="number"
-                  min="100"
-                  step="100"
-                  value={editQuotaMB}
-                  onChange={(e) => setEditQuotaMB(Number(e.target.value))}
-                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-white focus:outline-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={updating}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50"
-                >
-                  {updating ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
+          </form>
         </div>
-      )}
+      </Modal>
+      {feedback}
     </div>
   );
 }

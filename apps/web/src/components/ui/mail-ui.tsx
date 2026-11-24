@@ -29,12 +29,14 @@ export function Modal({
   title,
   children,
   className,
+  returnFocusRef,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   className?: string;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }) {
   const previousFocus = useRef<HTMLElement | null>(null);
   return (
@@ -48,7 +50,7 @@ export function Modal({
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            previousFocus.current?.focus();
+            (returnFocusRef?.current || previousFocus.current)?.focus();
           }}
           className={cn(
             "fixed left-1/2 top-1/2 z-50 flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border bg-popover shadow-2xl",

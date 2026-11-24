@@ -29,20 +29,19 @@ export default function AuditAdminPage() {
   }, [loadLogs]);
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
+    <div className="admin-page space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             System Audit Trail
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Immutable log of all administrative actions, domain updates, and
-            mailbox modifications
+          <p className="text-sm leading-6 text-muted-foreground mt-1.5">
+            Review changes to domains, mailboxes and account settings.
           </p>
         </div>
         <button
           onClick={loadLogs}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-zinc-700 bg-zinc-800 text-xs text-zinc-300 hover:text-white hover:bg-zinc-700 transition-colors"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-input bg-secondary text-xs text-foreground hover:text-foreground hover:bg-secondary transition-colors"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -50,12 +49,18 @@ export default function AuditAdminPage() {
       </div>
 
       {/* Filter */}
-      <div className="flex items-center gap-3 p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 text-xs">
-        <span className="text-zinc-400 font-medium">Action Filter:</span>
+      <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border text-xs">
+        <label
+          htmlFor="audit-action"
+          className="text-muted-foreground font-medium"
+        >
+          Action
+        </label>
         <select
+          id="audit-action"
           value={actionFilter}
           onChange={(e) => setActionFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-white focus:outline-none"
+          className="px-3 py-1.5 rounded-lg border border-input bg-secondary text-foreground focus:outline-none"
         >
           <option value="">All Actions</option>
           <option value="DOMAIN_CREATED">Domain Created</option>
@@ -68,10 +73,16 @@ export default function AuditAdminPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 overflow-hidden shadow-xl">
-        <table className="w-full text-left text-xs">
+      <div
+        role="region"
+        aria-label="Audit table"
+        tabIndex={0}
+        className="rounded-2xl border border-border bg-card overflow-x-auto shadow-sm"
+      >
+        <table className="w-full text-left text-sm">
+          <caption className="sr-only">Audit list</caption>
           <thead>
-            <tr className="border-b border-zinc-800 bg-zinc-900/80 text-zinc-400">
+            <tr className="border-b border-border bg-muted/50 text-muted-foreground">
               <th className="py-3 px-4 font-semibold">Action</th>
               <th className="py-3 px-4 font-semibold">Entity</th>
               <th className="py-3 px-4 font-semibold">Actor</th>
@@ -80,12 +91,12 @@ export default function AuditAdminPage() {
               <th className="py-3 px-4 font-semibold">Timestamp</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800/60 text-zinc-200 font-mono text-[11px]">
+          <tbody className="divide-y divide-border text-foreground text-xs">
             {loading ? (
               <tr>
                 <td
                   colSpan={6}
-                  className="py-8 text-center text-zinc-500 font-sans"
+                  className="py-8 text-center text-muted-foreground font-sans"
                 >
                   Loading audit logs...
                 </td>
@@ -94,7 +105,7 @@ export default function AuditAdminPage() {
               <tr>
                 <td
                   colSpan={6}
-                  className="py-8 text-center text-zinc-500 font-sans"
+                  className="py-8 text-center text-muted-foreground font-sans"
                 >
                   No audit logs recorded
                 </td>
@@ -103,29 +114,29 @@ export default function AuditAdminPage() {
               logs.map((log) => (
                 <tr
                   key={log.id}
-                  className="hover:bg-zinc-800/40 transition-colors"
+                  className="hover:bg-muted/60 transition-colors"
                 >
                   <td className="py-3 px-4">
-                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-indigo-400 font-semibold">
+                    <span className="px-2 py-0.5 rounded bg-secondary text-primary font-semibold">
                       {log.action}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-zinc-300 font-sans">
+                  <td className="py-3 px-4 text-foreground font-sans">
                     {log.resourceType}{" "}
-                    <span className="text-zinc-500 text-[10px] font-mono">
+                    <span className="text-muted-foreground text-xs font-mono">
                       ({log.resourceId})
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-zinc-300 font-sans">
+                  <td className="py-3 px-4 text-foreground font-sans">
                     {`${log.actorType}: ${log.actorId}`}
                   </td>
-                  <td className="py-3 px-4 text-zinc-500">
+                  <td className="py-3 px-4 text-muted-foreground">
                     {log.ipAddress || "—"}
                   </td>
-                  <td className="py-3 px-4 text-zinc-400 max-w-xs truncate">
+                  <td className="py-3 px-4 text-muted-foreground max-w-xs truncate">
                     {log.details ? JSON.stringify(log.details) : "-"}
                   </td>
-                  <td className="py-3 px-4 text-zinc-500 font-sans">
+                  <td className="py-3 px-4 text-muted-foreground font-sans">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
                 </tr>
