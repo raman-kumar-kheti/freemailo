@@ -192,7 +192,7 @@ services:
     ports:
       - "127.0.0.1:4000:4000"
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 4000
       DATABASE_URL: ${DATABASE_URL}
       REDIS_HOST: redis
@@ -240,7 +240,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       API_URL: http://api:4000
     depends_on:
