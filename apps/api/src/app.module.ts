@@ -20,7 +20,7 @@ import { HealthModule } from "./health/health.module";
       envFilePath:
         process.env.NODE_ENV === "production"
           ? [".env"]
-          : [".env", "../../.env", ".env.dev", "../../.env.dev"],
+          : [".env", "../../.env"],
     }),
     ThrottlerModule.forRoot([
       {

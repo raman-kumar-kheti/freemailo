@@ -4,17 +4,17 @@ Self-hosted, multi-domain email built with Postfix, Dovecot, Rspamd, PostgreSQL,
 
 ## Local development
 
-Requires Docker Compose v2, Node.js 24.15, and Python 3 with `requests` for integration tests. `.env.dev` contains **public development credentials**; use it only on a private development machine.
+Requires Docker Compose v2, Node.js 24.15, and Python 3 with `requests` for integration tests. Copy `.env.example` to `.env` or use the development `.env` on a private development machine.
 
 ```bash
 # Generate development certificates once. Preserve existing certificates.
 ./scripts/generate-certs.sh ./certs mail.example.test
 
 # Initialize the database before starting the API.
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm --build migrate
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm -e SEED_DEVELOPMENT=true -e NODE_ENV=development migrate npx ts-node prisma/seed.ts
-docker compose --env-file .env.dev -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm --build migrate
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml --profile tools run --rm -e SEED_DEVELOPMENT=true -e NODE_ENV=development migrate npx ts-node prisma/seed.ts
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml up -d --build --wait
 ```
 
 The development seed creates missing accounts without replacing existing passwords. It cannot run with `NODE_ENV=production`. On a fresh database, create domains through the admin API/UI to provision their DKIM keys; the example seed domain is for local delivery testing.

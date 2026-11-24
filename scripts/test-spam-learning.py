@@ -5,7 +5,10 @@ from pathlib import Path
 import requests
 
 BASE = 'http://127.0.0.1:4000/api'
-env = dict(line.strip().split('=',1) for line in (Path(__file__).resolve().parents[1] / '.env.dev').read_text().splitlines() if '=' in line and not line.startswith('#'))
+env_path = (Path(__file__).resolve().parents[1] / '.env')
+if not env_path.exists():
+    env_path = (Path(__file__).resolve().parents[1] / '.env.dev')
+env = dict(line.strip().split('=',1) for line in env_path.read_text().splitlines() if '=' in line and not line.startswith('#'))
 
 def learned():
     r = requests.get('http://127.0.0.1:11334/stat', headers={'Password':env['RSPAMD_PASSWORD']}, timeout=10)
