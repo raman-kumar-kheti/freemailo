@@ -29,6 +29,29 @@ The development seed creates missing accounts without replacing existing passwor
 | Metrics | http://localhost:4000/api/metrics | Restrict access in production |
 | Submission / IMAP | 587 STARTTLS, 465 TLS / 993 TLS | Mailbox credentials |
 
+### Environment Variables & Secret Rules
+
+Copy `.env.example` to `.env`. All passwords and secrets should be generated using `openssl rand -hex 32` (or 16).
+
+| Variable | Min Length | Rules & Format | Description |
+| :--- | :--- | :--- | :--- |
+| **`JWT_SECRET`** | **32 chars** | Alphanumeric / hex. In production, cannot contain `dev_`, `change`, or `example`. | Used by API to sign and verify user authentication tokens. |
+| **`DOVECOT_MASTER_PASSWORD`** | 16+ chars | Alphanumeric / hex. No newlines (`\n`) or special quotes. | Master password allowing the API to authenticate to Dovecot IMAP. |
+| **`RSPAMD_PASSWORD`** | 16+ chars | Alphanumeric / hex. No newlines (`\n` or `\r`). | Password for Rspamd controller API and Sieve learning integration. |
+| **`POSTGRES_PASSWORD`** | 16+ chars | Hex or URL-encoded alphanumeric. Must match `DATABASE_URL`. | PostgreSQL database user password. |
+| **`REDIS_PASSWORD`** | 16+ chars | Hex / alphanumeric. | Redis authentication password. |
+
+> **Quick secret generation:**
+> ```bash
+> # Generate a 64-character (256-bit) secret for JWT_SECRET:
+> openssl rand -hex 32
+>
+> # Generate 32-character secrets for DOVECOT_MASTER_PASSWORD and RSPAMD_PASSWORD:
+> openssl rand -hex 16
+> ```
+
+---
+
 ## Implemented behavior
 
 - Mail list, server-side sorting and pagination, search, MIME attachments, drafts, send/reply/forward, flags, move/trash and IMAP IDLE notifications.
