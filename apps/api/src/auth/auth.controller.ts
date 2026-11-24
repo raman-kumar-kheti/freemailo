@@ -7,6 +7,7 @@ import {
   Req,
   Res,
   Get,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -15,6 +16,8 @@ import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
+import { SignupDto } from "./dto/signup.dto";
+import { CheckAvailabilityDto } from "./dto/check-availability.dto";
 import { Public } from "../common/decorators/public.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
 import {
@@ -50,6 +53,43 @@ export class AuthController {
       maxAge: tokens.expiresIn * 1000,
     });
     res.setHeader("Cache-Control", "no-store");
+  }
+
+  @Public()
+  @Get("domains")
+  @ApiOperation({ summary: "List available public domains for registration" })
+  async getDomains() {
+    return this.authService.getPublicDomains();
+  }
+
+  @Public()
+  @Get("check-availability")
+  @ApiOperation({ summary: "Check if an email username is available on a domain" })
+  async checkAvailability(@Query() query: CheckAvailabilityDto) {
+    return this.authService.checkAvailability(query.username, query.domainId);
+  }
+
+  @Public()
+  @Throttle({ medium: { limit: 10, ttl: 60000 } })
+  @Post("signup")
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: "Self-service mailbox signup" })
+  async signup(
+    @Body() dto: SignupDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const ip = req.ip || req.socket.remoteAddress;
+    const ua = req.headers["user-agent"];
+    const result = await this.authService.signup(dto, ip, ua);
+
+    this.setCookies(res, result);
+
+    return {
+      accessToken: result.accessToken,
+      expiresIn: result.expiresIn,
+      user: result.user,
+    };
   }
 
   @Public()

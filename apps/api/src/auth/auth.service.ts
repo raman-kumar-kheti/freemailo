@@ -7,21 +7,33 @@ import {
   Injectable,
   UnauthorizedException,
   BadRequestException,
+  ConflictException,
+  NotFoundException,
   ServiceUnavailableException,
+  Logger,
+  Optional,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import * as argon2 from "argon2";
 import * as crypto from "crypto";
+import { promises as fs } from "fs";
+import * as path from "path";
 import { PrismaService } from "../prisma/prisma.service";
 import { LoginDto } from "./dto/login.dto";
+import { SignupDto } from "./dto/signup.dto";
+import { ProvisioningService } from "../provisioning/provisioning.service";
+import { ProvisionJobType, ActorType } from "@prisma/client";
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private configService: ConfigService,
+    @Optional() private provisioning?: ProvisioningService,
   ) {}
 
   /**
@@ -323,5 +335,233 @@ export class AuthService {
         deviceInfo: userAgent,
       },
     });
+  }
+
+  /**
+   * Get public active domains for mailbox registration
+   */
+  async getPublicDomains() {
+    const domains = await this.prisma.domain.findMany({
+      where: {
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+    return { data: domains };
+  }
+
+  /**
+   * Check if a proposed username is available on a specific domain
+   */
+  async checkAvailability(username: string, domainId: string) {
+    const localPart = username.toLowerCase().trim();
+    const domain = await this.prisma.domain.findFirst({
+      where: { id: domainId, isActive: true, deletedAt: null },
+    });
+    if (!domain) {
+      throw new NotFoundException("Domain not found or is inactive");
+    }
+
+    const email = `${localPart}@${domain.name}`;
+
+    const [existingMailbox, existingAlias] = await Promise.all([
+      this.prisma.mailbox.findFirst({
+        where: {
+          localPart,
+          domainId: domain.id,
+          deletedAt: null,
+        },
+      }),
+      this.prisma.alias.findFirst({
+        where: {
+          sourceAddress: email,
+        },
+      }),
+    ]);
+
+    const available = !existingMailbox && !existingAlias;
+
+    return {
+      available,
+      email,
+      domain: domain.name,
+      message: available
+        ? "Email address is available"
+        : "Email address is already in use",
+    };
+  }
+
+  /**
+   * Self-service mailbox user signup
+   */
+  async signup(dto: SignupDto, ipAddress?: string, userAgent?: string) {
+    const domain = await this.prisma.domain.findFirst({
+      where: { id: dto.domainId, isActive: true, deletedAt: null },
+    });
+    if (!domain) {
+      throw new BadRequestException("Selected domain is invalid or inactive");
+    }
+
+    const localPart = dto.username.toLowerCase().trim();
+    const email = `${localPart}@${domain.name}`;
+
+    // Ensure email is not already taken by mailbox or alias
+    const [existingMailbox, existingAlias] = await Promise.all([
+      this.prisma.mailbox.findFirst({
+        where: {
+          localPart,
+          domainId: domain.id,
+          deletedAt: null,
+        },
+      }),
+      this.prisma.alias.findFirst({
+        where: {
+          sourceAddress: email,
+        },
+      }),
+    ]);
+
+    if (existingMailbox || existingAlias) {
+      throw new ConflictException(`Email address ${email} is already taken`);
+    }
+
+    const passwordHash = await this.hashPassword(dto.password);
+
+    const nameParts = [dto.firstName.trim()];
+    if (dto.middleName?.trim()) nameParts.push(dto.middleName.trim());
+    nameParts.push(dto.lastName.trim());
+    const displayName = nameParts.join(" ");
+
+    const dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
+    const recoveryEmail = dto.recoveryEmail?.trim().toLowerCase() || null;
+
+    const mailbox = await this.prisma.mailbox.create({
+      data: {
+        localPart,
+        domainId: domain.id,
+        email,
+        passwordHash,
+        displayName,
+        firstName: dto.firstName.trim(),
+        middleName: dto.middleName?.trim() || null,
+        lastName: dto.lastName.trim(),
+        dateOfBirth,
+        recoveryEmail,
+        quotaBytes: BigInt(1073741824), // 1 GB default quota
+        isActive: true,
+      },
+      include: { domain: true },
+    });
+
+    // Create 7 standard system labels for the mailbox
+    const defaultLabels = [
+      "Inbox",
+      "Starred",
+      "Sent",
+      "Drafts",
+      "Spam",
+      "Trash",
+      "All Mail",
+    ];
+    await Promise.all(
+      defaultLabels.map((name) =>
+        this.prisma.label.create({
+          data: {
+            mailboxId: mailbox.id,
+            name,
+            isSystem: true,
+          },
+        }),
+      ),
+    );
+
+    // Enqueue BullMQ job to create Maildir with correct vmail permissions
+    if (this.provisioning) {
+      try {
+        await this.provisioning.enqueueJob(ProvisionJobType.CREATE_MAILBOX, {
+          mailboxId: mailbox.id,
+          email: mailbox.email,
+          domain: domain.name,
+          localPart: mailbox.localPart,
+        });
+      } catch (err: any) {
+        this.logger.warn(`Failed to enqueue provisioning job: ${err?.message}`);
+      }
+    }
+
+    // Directly create the Maildir directories on the volume if path is mounted
+    try {
+      const vmailRoot = process.env.VMAIL_ROOT || "/var/vmail";
+      for (const folder of ["cur", "new", "tmp"]) {
+        await fs.mkdir(
+          path.join(vmailRoot, domain.name, localPart, "Maildir", folder),
+          { recursive: true, mode: 0o700 },
+        );
+      }
+    } catch (e: any) {
+      this.logger.warn(
+        `Direct Maildir creation note: ${e?.message}`,
+      );
+    }
+
+    // Write audit log
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorType: ActorType.MAILBOX,
+          actorId: mailbox.id,
+          action: "mailbox.signup",
+          resourceType: "Mailbox",
+          resourceId: mailbox.id,
+          ipAddress: ipAddress || null,
+          details: {
+            email: mailbox.email,
+            domain: domain.name,
+            recoveryEmail: mailbox.recoveryEmail,
+          },
+        },
+      });
+    } catch (e: any) {
+      this.logger.warn(`Failed to write signup audit log: ${e.message}`);
+    }
+
+    // Generate JWT tokens and create active session
+    const tokens = await this.generateTokens({
+      sub: mailbox.id,
+      email: mailbox.email,
+      role: "MAILBOX",
+      isMailbox: true,
+      isAdmin: false,
+    });
+
+    await this.storeRefreshToken(
+      mailbox.id,
+      null,
+      tokens.refreshToken,
+      ipAddress,
+      userAgent,
+    );
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresIn: accessTokenSeconds(),
+      user: {
+        id: mailbox.id,
+        email: mailbox.email,
+        displayName: mailbox.displayName,
+        firstName: mailbox.firstName,
+        lastName: mailbox.lastName,
+        role: "MAILBOX",
+        domain: domain.name,
+      },
+    };
   }
 }

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Mail, Lock, Loader2, ArrowRight } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -120,6 +121,16 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div className="text-center text-xs text-muted-foreground pt-1">
+          Don&apos;t have an account?{" "}
+          <Link
+            href="/signup"
+            className="font-semibold text-primary hover:underline transition-colors"
+          >
+            Create an account
+          </Link>
+        </div>
 
         <div className="pt-4 border-t border-border text-center text-xs text-muted-foreground">
           <span>FreeMailo Self-Hosted Platform</span>

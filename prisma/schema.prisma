@@ -92,6 +92,11 @@ model Mailbox {
   email       String   @unique /// Full address: localPart@domain.name
   passwordHash String  /// Argon2id hash, compatible with Dovecot {ARGON2ID}
   displayName String?
+  firstName   String?  /// User first name
+  middleName  String?  /// User middle name (optional)
+  lastName    String?  /// User last name
+  dateOfBirth DateTime? /// Date of birth
+  recoveryEmail String? /// External recovery email address
   quotaBytes  BigInt   @default(1073741824) /// 1 GB default
   usedBytes   BigInt   @default(0)
   isActive    Boolean  @default(true)

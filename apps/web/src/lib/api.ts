@@ -8,6 +8,31 @@ export interface User {
   domain: string;
   role: string;
   displayName?: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface PublicDomain {
+  id: string;
+  name: string;
+}
+
+export interface AvailabilityCheckResult {
+  available: boolean;
+  email: string;
+  domain: string;
+  message: string;
+}
+
+export interface SignupPayload {
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  username: string;
+  domainId: string;
+  password: string;
+  dateOfBirth?: string;
+  recoveryEmail?: string;
 }
 
 export interface Label {
@@ -151,7 +176,8 @@ class ApiClient {
       this.setToken(null);
       if (
         typeof window !== "undefined" &&
-        !window.location.pathname.startsWith("/login")
+        !window.location.pathname.startsWith("/login") &&
+        !window.location.pathname.startsWith("/signup")
       ) {
         window.location.href = window.location.pathname.startsWith("/admin")
           ? "/admin/login"
@@ -177,6 +203,28 @@ class ApiClient {
   }
 
   // --- Auth ---
+  async getPublicDomains(): Promise<{ data: PublicDomain[] }> {
+    return this.request("/auth/domains");
+  }
+
+  async checkAvailability(
+    username: string,
+    domainId: string,
+  ): Promise<AvailabilityCheckResult> {
+    return this.request(
+      `/auth/check-availability?username=${encodeURIComponent(username)}&domainId=${encodeURIComponent(domainId)}`,
+    );
+  }
+
+  async signup(payload: SignupPayload) {
+    const data = await this.request("/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    this.setToken(data.accessToken);
+    return data;
+  }
+
   async login(email: string, password: string) {
     const data = await this.request("/auth/login", {
       method: "POST",
