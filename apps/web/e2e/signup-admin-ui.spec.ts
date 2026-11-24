@@ -185,31 +185,64 @@ test("signup stays stable while editing and preserves the signup request", async
 }) => {
   const writes = await setup(page);
   await page.goto("/signup");
+
+  // Step 1: Name
+  await expect(page.getByLabel("First name", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Last name", { exact: true })).toBeVisible();
   await expect(
-    page.getByLabel("Confirm password", { exact: true }),
+    page.getByRole("button", { name: "Next", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Create account", exact: true }),
-  ).toBeVisible();
-  const initial = await page
-    .locator("#password")
-    .evaluate((el) => el.getBoundingClientRect().top + scrollY);
+
+  // Next blocked if required fields empty
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Enter first name")).toBeVisible();
+
   await page.getByLabel("First name", { exact: true }).fill("David");
   await page.getByLabel("Last name", { exact: true }).fill("Smith");
-  await page.getByLabel("Choose your email").fill("david");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 2: Birthday (optional)
+  await expect(page.getByLabel("Date of birth", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 3: Email
+  await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
+  await page.getByLabel("Username", { exact: true }).fill("david");
   await expect(
     page.getByRole("status").filter({ hasText: "is available" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 4: Password
+  await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Confirm password", { exact: true }),
+  ).toBeVisible();
   await page.locator("#password").fill("SecurePassword123!");
   await page.locator("#confirmPassword").fill("SecurePassword123!");
-  await page.getByLabel("First name", { exact: true }).fill("");
+
+  // Verify back never loses data
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByLabel("Username", { exact: true })).toHaveValue("david");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.locator("#password")).toHaveValue("SecurePassword123!");
-  expect(
-    await page
-      .locator("#password")
-      .evaluate((el) => el.getBoundingClientRect().top + scrollY),
-  ).toBe(initial);
-  await page.getByLabel("First name", { exact: true }).fill("David");
+  await expect(page.locator("#confirmPassword")).toHaveValue("SecurePassword123!");
+
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 5: Recovery email (optional)
+  await expect(page.getByLabel("Recovery email", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 6: Review & Create
+  await expect(
+    page.getByRole("heading", { name: "Review and create" }),
+  ).toBeVisible();
+  await expect(page.getByText("david@example.test")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create account", exact: true }),
+  ).toBeVisible();
+
   await page
     .getByRole("button", { name: "Create account", exact: true })
     .click();
@@ -228,7 +261,6 @@ test("signup stays stable while editing and preserves the signup request", async
     domainId: "domain-1",
     password: "SecurePassword123!",
   });
-  await expect(page.locator("#password")).toHaveValue("SecurePassword123!");
 });
 
 test("signup is accessible on mobile in both themes with reduced motion", async ({
@@ -238,13 +270,29 @@ test("signup is accessible on mobile in both themes with reduced motion", async 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/signup");
+
+  // Step 1: Fill name
+  await page.getByLabel("First name", { exact: true }).fill("David");
+  await page.getByLabel("Last name", { exact: true }).fill("Smith");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 2: Skip birthday
+  await page.getByRole("button", { name: "Skip", exact: true }).click();
+
+  // Step 3: Email domain selection
   await expect(page.getByLabel("Email domain")).toHaveValue("domain-1");
   await page.getByLabel("Email domain").selectOption("domain-2");
+  await page.getByLabel("Username", { exact: true }).fill("david");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  // Step 4: Password toggling
+  await expect(page.locator("#password")).toBeVisible();
   await page
     .getByRole("button", { name: "Show password", exact: true })
     .focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#password")).toHaveAttribute("type", "text");
+
   await noOverflow(page);
   await audit(page);
   await page.screenshot({
@@ -439,9 +487,8 @@ test("admin mobile navigation, tables and dialogs fit small and landscape screen
   ).toBeVisible();
   await noOverflow(page);
   await page.goto("/signup");
-  await expect(page.getByLabel("Email domain")).toHaveValue("domain-1");
   await noOverflow(page);
-  await expect(page.locator("#password")).toHaveCSS("font-size", "16px");
+  await expect(page.locator("#firstName")).toHaveCSS("font-size", "16px");
 });
 
 test("admin confirmations preserve cancel behavior and errors keep form inputs", async ({

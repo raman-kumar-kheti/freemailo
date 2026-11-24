@@ -19,6 +19,22 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml u
 
 The development seed creates missing accounts without replacing existing passwords. It cannot run with `NODE_ENV=production`. On a fresh database, create domains through the admin API/UI to provision their DKIM keys; the example seed domain is for local delivery testing.
 
+### Docker Compose Commands & Stack Operations
+
+| Operation | Production Stack | Development Stack |
+| :--- | :--- | :--- |
+| **Build all containers** | `docker compose build` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml build` |
+| **Start full stack (detached)** | `docker compose up -d` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d` |
+| **Build & start full stack** | `docker compose up -d --build` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build` |
+| **Stop full stack** | `docker compose stop` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml stop` |
+| **Tear down full stack** | `docker compose down` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml down` |
+| **Tear down + wipe volumes** | `docker compose down -v` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v` |
+| **Check container status** | `docker compose ps` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml ps` |
+| **Stream live logs (all)** | `docker compose logs -f` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f` |
+| **Rebuild single service** | `docker compose up -d --build web` | `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build web` |
+
+> **Tip:** You can set `COMPOSE_FILE=docker-compose.yml:docker-compose.dev.yml` in your environment or `.env` during local development so you can run bare `docker compose up -d`, `docker compose build`, and `docker compose down` commands without repeating `-f` flags.
+
 | Service | Address | Development account |
 | --- | --- | --- |
 | Webmail | http://localhost:3000 | `alice@example.test` / `alice123456`, `bob@example.test` / `bob123456` |
