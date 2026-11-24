@@ -163,3 +163,77 @@
   pointer-events: none;
   color: hsl(var(--muted-foreground));
 }
+
+/* Signup and administration extend the mail UI's shared palette. */
+@layer components {
+  .signup-input {
+    @apply h-11 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+  .signup-password-toggle {
+    @apply absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground;
+  }
+  .admin-page {
+    @apply mx-auto min-w-0 max-w-7xl;
+  }
+  .admin-page button,
+  .admin-dialog button {
+    @apply min-h-9;
+  }
+  .admin-page button:has(> svg:only-child),
+  .admin-dialog button:has(> svg:only-child) {
+    @apply min-w-9;
+  }
+  .admin-page input,
+  .admin-page select,
+  .admin-dialog input,
+  .admin-dialog select {
+    @apply min-h-11 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20;
+  }
+  .admin-page th {
+    @apply whitespace-nowrap text-xs font-medium;
+  }
+  .admin-page td {
+    @apply align-middle;
+  }
+  .admin-page td > svg {
+    @apply mr-2 inline-block align-middle;
+  }
+  .admin-dialog label {
+    @apply text-sm;
+  }
+}
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-enter: 200ms;
+}
+/* Rare page entrance only. Inputs, tables and keyboard actions stay stationary. */
+.auth-card {
+  transition: opacity var(--motion-enter) var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+@media (max-width: 639px) {
+  /* Prevent automatic input zoom on mobile Safari. */
+  .auth-card input,
+  .auth-card select,
+  .admin-page input,
+  .admin-page select,
+  .admin-dialog input,
+  .admin-dialog select {
+    font-size: 1rem;
+  }
+  .admin-page button,
+  .admin-dialog button {
+    min-height: 2.75rem;
+  }
+  .admin-page button:has(> svg:only-child),
+  .admin-dialog button:has(> svg:only-child) {
+    min-width: 2.75rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-card {
+    transition: none;
+  }
+}

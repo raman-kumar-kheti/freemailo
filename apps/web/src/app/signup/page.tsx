@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Mail,
   Lock,
   User,
-  Calendar,
   ShieldCheck,
   CheckCircle2,
   XCircle,
@@ -14,43 +13,39 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
-  Check,
 } from "lucide-react";
 import { api, PublicDomain } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
-/* ------------------------------------------------------------------ */
-/*  Reveal wrapper — each section fades + slides up when `show` flips */
-/* ------------------------------------------------------------------ */
-function Reveal({
-  show,
+function SignupField({
+  label,
+  optional,
   children,
-}: {
-  show: boolean;
-  children: React.ReactNode;
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  optional?: boolean;
+  children?: React.ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [maxH, setMaxH] = useState(0);
-
-  useEffect(() => {
-    if (show && ref.current) {
-      // measure natural height once visible
-      setMaxH(ref.current.scrollHeight + 32);
-    }
-  }, [show]);
-
   return (
-    <div
-      ref={ref}
-      style={{
-        maxHeight: show ? `${maxH || 600}px` : "0px",
-        opacity: show ? 1 : 0,
-        transform: show ? "translateY(0)" : "translateY(8px)",
-      }}
-      className="overflow-hidden transition-all duration-[320ms] ease-[cubic-bezier(0.23,1,0.32,1)]"
-    >
-      {children}
+    <div className="min-w-0">
+      <label htmlFor={props.id} className="mb-1.5 block text-sm font-medium">
+        {label}{" "}
+        {optional && (
+          <span className="text-xs font-normal text-muted-foreground">
+            (optional)
+          </span>
+        )}
+      </label>
+      <div className="relative">
+        <input
+          {...props}
+          className={`signup-input ${children ? "pr-12" : ""}`}
+        />
+        {children}
+      </div>
     </div>
   );
 }
@@ -72,8 +67,6 @@ export default function SignupPage() {
   const [domainId, setDomainId] = useState("");
   const [domains, setDomains] = useState<PublicDomain[]>([]);
   const [domainsLoading, setDomainsLoading] = useState(true);
-  const [domainDropdownOpen, setDomainDropdownOpen] = useState(false);
-  const domainDropdownRef = useRef<HTMLDivElement>(null);
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -95,23 +88,6 @@ export default function SignupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  /* ---- Track which sections the user has "passed through" ---- */
-  const [nameVisited, setNameVisited] = useState(false);
-
-  /* ---- Close domain dropdown on outside click ---- */
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        domainDropdownRef.current &&
-        !domainDropdownRef.current.contains(event.target as Node)
-      ) {
-        setDomainDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   /* ---- Fetch available domains ---- */
   useEffect(() => {
     let mounted = true;
@@ -124,13 +100,16 @@ export default function SignupPage() {
           setDomainId(res.data[0].id);
         }
       } catch {
-        if (mounted) setError("Failed to load email domains. Please try again later.");
+        if (mounted)
+          setError("Failed to load email domains. Please try again later.");
       } finally {
         if (mounted) setDomainsLoading(false);
       }
     }
     loadDomains();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   /* ---- Debounced availability check ---- */
@@ -145,7 +124,8 @@ export default function SignupPage() {
         setAvailability({
           checked: true,
           available: false,
-          message: "Only letters, numbers, dots, hyphens, and underscores allowed.",
+          message:
+            "Only letters, numbers, dots, hyphens, and underscores allowed.",
         });
         return;
       }
@@ -196,13 +176,6 @@ export default function SignupPage() {
     confirmPassword.length >= 8 &&
     password === confirmPassword;
 
-  // Progressive reveal conditions
-  const showDob = nameValid || nameVisited;
-  const showEmail = showDob; // DOB is optional so email shows with DOB
-  const showPasswordSection = showEmail && emailValid;
-  const showRecovery = showPasswordSection && passwordValid;
-  const showSubmit = showRecovery;
-
   /* ---- Password strength ---- */
   const calculatePasswordStrength = (pass: string) => {
     let score = 0;
@@ -247,409 +220,335 @@ export default function SignupPage() {
     }
   };
 
-  /* ================================================================ */
-  /*  Render                                                          */
-  /* ================================================================ */
   return (
-    <main className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-card border border-border shadow-sm rounded-3xl p-8 sm:p-10 space-y-6">
-        {/* ── Brand Header (matches login) ── */}
-        <div className="text-center space-y-2">
-          <div className="w-14 h-14 rounded-2xl bg-primary mx-auto flex items-center justify-center text-white shadow-lg">
-            <Mail className="w-7 h-7" />
+    <main className="min-h-dvh bg-background px-4 py-8 sm:py-12">
+      <div className="auth-card relative mx-auto w-full max-w-md rounded-3xl border bg-card p-6 shadow-sm sm:p-8">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle />
+        </div>
+        <div className="mb-7 space-y-3 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+            <Mail size={25} aria-hidden="true" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-balance text-2xl font-semibold tracking-tight">
             Create your FreeMailo account
           </h1>
-          <p className="text-xs text-muted-foreground">
-            Get a fast, secure email address
+          <p className="text-sm text-muted-foreground">
+            Your own email address. A fresh start.
           </p>
         </div>
 
-        {/* ── Error banner ── */}
-        {error && (
-          <div
-            role="alert"
-            className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs font-medium text-center animate-in fade-in"
-          >
-            {error}
-          </div>
-        )}
-
-        {/* ── Form ── */}
-        <form onSubmit={handleSubmit} className="space-y-0">
-          {/* ─── Section 1 : Name ─── */}
-          <div className="space-y-3 pb-4">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6"
+          aria-busy={submitting}
+        >
+          <fieldset className="min-w-0 space-y-4">
+            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold">
+              <User size={16} className="text-primary" aria-hidden="true" />{" "}
+              About you
+            </legend>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor="firstName"
-                  className="block text-xs font-semibold text-muted-foreground mb-1.5"
-                >
-                  First name <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="firstName"
-                    type="text"
-                    required
-                    autoFocus
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    onBlur={() => { if (nameValid) setNameVisited(true); }}
-                    placeholder="David"
-                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                  />
-                </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="lastName"
-                  className="block text-xs font-semibold text-muted-foreground mb-1.5"
-                >
-                  Last name <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="lastName"
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    onBlur={() => { if (nameValid) setNameVisited(true); }}
-                    placeholder="Smith"
-                    className="w-full h-11 pl-10 pr-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Middle name — optional, inline */}
-            <div>
-              <label
-                htmlFor="middleName"
-                className="block text-xs font-semibold text-muted-foreground mb-1.5"
-              >
-                Middle name{" "}
-                <span className="font-normal text-muted-foreground/60">(optional)</span>
-              </label>
-              <input
-                id="middleName"
-                type="text"
-                value={middleName}
-                onChange={(e) => setMiddleName(e.target.value)}
-                onBlur={() => { if (nameValid) setNameVisited(true); }}
-                placeholder="Robert"
-                className="w-full h-11 px-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
+              <SignupField
+                id="firstName"
+                label="First name"
+                autoComplete="given-name"
+                required
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="David"
+              />
+              <SignupField
+                id="lastName"
+                label="Last name"
+                autoComplete="family-name"
+                required
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Smith"
               />
             </div>
-          </div>
+            <SignupField
+              id="middleName"
+              label="Middle name"
+              optional
+              autoComplete="additional-name"
+              value={middleName}
+              onChange={(e) => setMiddleName(e.target.value)}
+              placeholder="Robert"
+            />
+            <SignupField
+              id="dateOfBirth"
+              label="Date of birth"
+              optional
+              type="date"
+              autoComplete="bday"
+              value={dateOfBirth}
+              onChange={(e) => setDateOfBirth(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
+            />
+          </fieldset>
 
-          {/* ─── Section 2 : Date of Birth (optional) ─── */}
-          <Reveal show={showDob}>
-            <div className="pb-4">
-              <label
-                htmlFor="dateOfBirth"
-                className="block text-xs font-semibold text-muted-foreground mb-1.5"
-              >
-                Date of birth{" "}
-                <span className="font-normal text-muted-foreground/60">(optional)</span>
-              </label>
-              <div className="relative">
-                <Calendar className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="dateOfBirth"
-                  type="date"
-                  value={dateOfBirth}
-                  onChange={(e) => setDateOfBirth(e.target.value)}
-                  max={new Date().toISOString().split("T")[0]}
-                  className="w-full h-11 pl-10 pr-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                />
-              </div>
-            </div>
-          </Reveal>
-
-          {/* ─── Section 3 : Email Address ─── */}
-          <Reveal show={showEmail}>
-            <div className="pb-4 space-y-2">
-              <label
-                htmlFor="username"
-                className="block text-xs font-semibold text-muted-foreground mb-1.5"
-              >
-                Choose your email <span className="text-destructive">*</span>
-              </label>
-
-              {/* Unified email input row */}
-              <div
-                ref={domainDropdownRef}
-                className="relative flex items-center h-12 w-full rounded-xl border border-input bg-background focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary transition-all"
-              >
-                {/* Username input */}
-                <input
-                  id="username"
-                  type="text"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  value={username}
-                  onChange={(e) =>
-                    setUsername(
-                      e.target.value.toLowerCase().replace(/[^a-zA-Z0-9._-]/g, ""),
-                    )
-                  }
-                  placeholder="username"
-                  className="bg-transparent border-0 h-full pl-4 pr-1 text-sm font-medium text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:ring-0 flex-1 min-w-0"
-                />
-
-                {/* Domain badge + switcher */}
-                <div className="relative shrink-0 flex items-center pr-2">
-                  <button
-                    type="button"
-                    onClick={() => setDomainDropdownOpen(!domainDropdownOpen)}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-muted-foreground hover:text-foreground text-xs sm:text-sm transition-colors select-none"
-                    title="Switch domain"
-                  >
-                    <span className="text-muted-foreground/60 font-medium">
-                      @{selectedDomain?.name || "example.com"}
-                    </span>
-                    {domains.length > 1 && (
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          domainDropdownOpen ? "rotate-180 text-primary" : ""
-                        }`}
-                      />
-                    )}
-                  </button>
-
-                  {/* Domain dropdown */}
-                  {domainDropdownOpen && domains.length > 1 && (
-                    <div className="absolute right-0 top-full mt-1.5 w-56 max-h-52 overflow-y-auto rounded-xl bg-popover border border-border shadow-lg p-1 z-50 animate-in fade-in zoom-in-95 duration-150">
-                      {domains.map((dom) => {
-                        const isSelected = dom.id === domainId;
-                        return (
-                          <button
-                            key={dom.id}
-                            type="button"
-                            onClick={() => {
-                              setDomainId(dom.id);
-                              setDomainDropdownOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "text-foreground hover:bg-secondary"
-                            }`}
-                          >
-                            <span className="truncate">@{dom.name}</span>
-                            {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
+          <fieldset className="min-w-0 border-t pt-5">
+            <legend className="sr-only">Email address</legend>
+            <label
+              htmlFor="username"
+              className="mb-2 flex items-center gap-2 text-sm font-semibold"
+            >
+              <Mail size={16} className="text-primary" aria-hidden="true" />{" "}
+              Choose your email
+            </label>
+            <div className="flex min-w-0 items-center rounded-xl border border-input bg-background focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+              <input
+                id="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={username}
+                onChange={(e) =>
+                  setUsername(
+                    e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-zA-Z0-9._-]/g, ""),
+                  )
+                }
+                aria-describedby="email-feedback"
+                placeholder="username"
+                className="h-12 w-full min-w-0 flex-1 rounded-l-xl bg-transparent pl-3 pr-1 text-sm outline-none"
+              />
+              <div className="relative max-w-[58%] shrink-0">
+                <label htmlFor="signup-domain" className="sr-only">
+                  Email domain
+                </label>
+                <select
+                  id="signup-domain"
+                  value={domainId}
+                  onChange={(e) => setDomainId(e.target.value)}
+                  disabled={domainsLoading || domains.length < 2}
+                  className="h-11 w-full appearance-none truncate rounded-xl bg-transparent pl-2 pr-8 text-sm text-muted-foreground disabled:opacity-100"
+                >
+                  {!domains.length && (
+                    <option value="">
+                      {domainsLoading ? "Loading…" : "No domains"}
+                    </option>
                   )}
-                </div>
+                  {domains.map((domain) => (
+                    <option key={domain.id} value={domain.id}>
+                      @{domain.name}
+                    </option>
+                  ))}
+                </select>
+                {domains.length > 1 && (
+                  <ChevronDown
+                    size={14}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                )}
               </div>
-
-              {/* Availability feedback */}
-              <div className="min-h-[22px] flex items-center text-xs pl-1">
-                {checkingAvailability && (
-                  <span className="text-muted-foreground flex items-center gap-1.5 animate-pulse">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                    Checking availability…
+            </div>
+            <div
+              id="email-feedback"
+              role="status"
+              aria-live="polite"
+              className="mt-2 min-h-10 break-words text-xs leading-5"
+            >
+              {checkingAvailability ? (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Loader2
+                    size={14}
+                    aria-hidden="true"
+                    className="animate-spin"
+                  />
+                  Checking availability…
+                </span>
+              ) : availability.checked ? (
+                availability.available ? (
+                  <span className="flex items-start gap-1.5 text-primary">
+                    <CheckCircle2
+                      size={14}
+                      className="mt-0.5 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {username}@{selectedDomain?.name} is available
+                    </span>
                   </span>
-                )}
-                {!checkingAvailability && availability.checked && (
-                  <>
-                    {availability.available ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {username}@{selectedDomain?.name} is available
-                      </span>
-                    ) : (
-                      <span className="text-destructive font-medium flex items-center gap-1.5">
-                        <XCircle className="w-3.5 h-3.5" />
-                        {availability.message ||
-                          `${username}@${selectedDomain?.name} is already taken`}
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
+                ) : (
+                  <span className="flex items-start gap-1.5 text-destructive">
+                    <XCircle
+                      size={14}
+                      className="mt-0.5 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {availability.message ||
+                        `${username}@${selectedDomain?.name} is already taken`}
+                    </span>
+                  </span>
+                )
+              ) : (
+                <span className="text-muted-foreground">
+                  Letters, numbers, dots, hyphens and underscores.
+                </span>
+              )}
             </div>
-          </Reveal>
+          </fieldset>
 
-          {/* ─── Section 4 : Password ─── */}
-          <Reveal show={showPasswordSection}>
-            <div className="pb-4 space-y-3">
-              <div>
-                <label
-                  htmlFor="password"
-                  className="block text-xs font-semibold text-muted-foreground mb-1.5"
-                >
-                  Password <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="password"
-                    type={passwordVisible ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimum 8 characters"
-                    className="w-full h-11 pl-10 pr-11 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setPasswordVisible(!passwordVisible)}
-                    tabIndex={-1}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                  >
-                    {passwordVisible ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {/* Strength meter */}
-                {password && (
-                  <div className="mt-2 space-y-1">
-                    <div className="flex gap-1 h-1">
-                      {[0, 1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className={`flex-1 rounded-full transition-all duration-300 ${
-                            i < pwStrength
-                              ? strengthColors[pwStrength - 1] || "bg-primary"
-                              : "bg-muted"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      {strengthLabels[pwStrength - 1] || "Too short"} · min 8 characters
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-xs font-semibold text-muted-foreground mb-1.5"
-                >
-                  Confirm password <span className="text-destructive">*</span>
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="confirmPassword"
-                    type={confirmPasswordVisible ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Re-enter password"
-                    className="w-full h-11 pl-10 pr-11 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
-                    tabIndex={-1}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-0.5"
-                  >
-                    {confirmPasswordVisible ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {password && confirmPassword && (
-                  <div className="mt-1.5 text-xs pl-1">
-                    {password === confirmPassword ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Passwords match
-                      </span>
-                    ) : (
-                      <span className="text-destructive font-medium flex items-center gap-1.5">
-                        <XCircle className="w-3.5 h-3.5" /> Passwords do not match
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
+          <fieldset className="min-w-0 space-y-4 border-t pt-5">
+            <legend className="sr-only">Password</legend>
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Lock size={16} className="text-primary" aria-hidden="true" />{" "}
+              Keep your account secure
             </div>
-          </Reveal>
-
-          {/* ─── Section 5 : Recovery Email ─── */}
-          <Reveal show={showRecovery}>
-            <div className="pb-4">
-              <label
-                htmlFor="recoveryEmail"
-                className="block text-xs font-semibold text-muted-foreground mb-1.5"
+            <div>
+              <SignupField
+                id="password"
+                label="Password"
+                type={passwordVisible ? "text" : "password"}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                aria-describedby="password-strength"
               >
-                Recovery email{" "}
-                <span className="font-normal text-muted-foreground/60">(optional)</span>
-              </label>
-              <div className="relative">
-                <ShieldCheck className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  id="recoveryEmail"
-                  type="email"
-                  value={recoveryEmail}
-                  onChange={(e) => setRecoveryEmail(e.target.value)}
-                  placeholder="backup@example.com"
-                  className="w-full h-11 pl-10 pr-4 rounded-xl border border-input bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary focus:outline-none text-sm transition-all"
-                />
+                <button
+                  type="button"
+                  onClick={() => setPasswordVisible(!passwordVisible)}
+                  aria-label={
+                    passwordVisible ? "Hide password" : "Show password"
+                  }
+                  aria-pressed={passwordVisible}
+                  className="signup-password-toggle"
+                >
+                  {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </SignupField>
+              <div className="mt-2 space-y-1.5" id="password-strength">
+                <div className="flex h-1 gap-1" aria-hidden="true">
+                  {[0, 1, 2, 3].map((index) => (
+                    <span
+                      key={index}
+                      className={`flex-1 rounded-full ${index < pwStrength ? strengthColors[pwStrength - 1] || "bg-primary" : "bg-secondary"}`}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {password
+                    ? `${strengthLabels[pwStrength - 1] || "Too short"} · `
+                    : ""}
+                  Use at least 8 characters.
+                </p>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground pl-1">
-                Used for security notifications and password resets
+            </div>
+            <div>
+              <SignupField
+                id="confirmPassword"
+                label="Confirm password"
+                type={confirmPasswordVisible ? "text" : "password"}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                aria-describedby="password-match"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    setConfirmPasswordVisible(!confirmPasswordVisible)
+                  }
+                  aria-label={
+                    confirmPasswordVisible
+                      ? "Hide confirm password"
+                      : "Show confirm password"
+                  }
+                  aria-pressed={confirmPasswordVisible}
+                  className="signup-password-toggle"
+                >
+                  {confirmPasswordVisible ? (
+                    <EyeOff size={17} />
+                  ) : (
+                    <Eye size={17} />
+                  )}
+                </button>
+              </SignupField>
+              <p
+                id="password-match"
+                role="status"
+                className={`mt-2 min-h-5 text-xs ${password === confirmPassword ? "text-primary" : "text-destructive"}`}
+              >
+                {password && confirmPassword
+                  ? password === confirmPassword
+                    ? "Passwords match"
+                    : "Passwords do not match"
+                  : ""}
               </p>
             </div>
-          </Reveal>
+          </fieldset>
 
-          {/* ─── Submit ─── */}
-          <Reveal show={showSubmit}>
-            <div className="pt-1">
-              <button
-                type="submit"
-                disabled={submitting || !nameValid || !emailValid || !passwordValid}
-                className="w-full h-11 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 flex items-center justify-center gap-2 shadow-md hover:shadow transition-all disabled:opacity-50"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating account…
-                  </>
-                ) : (
-                  <>
-                    Create account
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+          <div className="border-t pt-5">
+            <SignupField
+              id="recoveryEmail"
+              label="Recovery email"
+              optional
+              type="email"
+              autoComplete="email"
+              value={recoveryEmail}
+              onChange={(e) => setRecoveryEmail(e.target.value)}
+              placeholder="backup@example.com"
+              aria-describedby="recovery-hint"
+            />
+            <p
+              id="recovery-hint"
+              className="mt-2 text-xs leading-5 text-muted-foreground"
+            >
+              For security notifications and password resets.
+            </p>
+          </div>
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              {error}
             </div>
-          </Reveal>
+          )}
+          <button
+            type="submit"
+            disabled={submitting || !nameValid || !emailValid || !passwordValid}
+            className="primary-button min-h-12 w-full"
+          >
+            {submitting ? (
+              <>
+                <Loader2
+                  size={17}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+                Creating account…
+              </>
+            ) : (
+              <>
+                Create account
+                <ArrowRight size={17} aria-hidden="true" />
+              </>
+            )}
+          </button>
         </form>
-
-        {/* ── Footer ── */}
-        <div className="text-center text-xs text-muted-foreground pt-1">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
             href="/login"
-            className="font-semibold text-primary hover:underline transition-colors"
+            className="font-medium text-primary hover:underline"
           >
             Sign in
           </Link>
-        </div>
-
-        <div className="pt-4 border-t border-border text-center text-xs text-muted-foreground">
-          <span>FreeMailo Self-Hosted Platform</span>
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-1.5 border-t pt-5 text-xs text-muted-foreground">
+          <ShieldCheck size={14} aria-hidden="true" />
+          FreeMailo Self-Hosted Platform
         </div>
       </div>
     </main>

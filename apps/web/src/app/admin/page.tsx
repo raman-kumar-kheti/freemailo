@@ -83,46 +83,41 @@ export default function AdminOverviewPage() {
       title: "Hosted Domains",
       value: stats.domains,
       icon: Globe,
-      color: "from-blue-500 to-cyan-500",
       href: "/admin/domains",
     },
     {
       title: "Mailboxes",
       value: stats.mailboxes,
       icon: Mail,
-      color: "from-indigo-500 to-purple-500",
       href: "/admin/mailboxes",
     },
     {
       title: "Aliases & Forwards",
       value: stats.aliases,
       icon: Forward,
-      color: "from-emerald-500 to-teal-500",
       href: "/admin/aliases",
     },
     {
       title: "Provisioning Jobs",
       value: stats.jobs,
       icon: Cpu,
-      color: "from-amber-500 to-orange-500",
       href: "/admin/jobs",
     },
   ];
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="admin-page space-y-7">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           System Overview
         </h1>
-        <p className="text-xs text-zinc-400 mt-1">
-          Real-time cluster telemetry, virtual email domains, and infrastructure
-          provisioning
+        <p className="text-sm leading-6 text-muted-foreground mt-1.5">
+          An overview of your domains, mailboxes and mail services.
         </p>
       </div>
 
       {error && (
-        <p role="alert" className="text-red-300">
+        <p role="alert" className="text-destructive">
           {error}
         </p>
       )}
@@ -131,32 +126,33 @@ export default function AdminOverviewPage() {
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div
+            <button
+              type="button"
               key={card.title}
               onClick={() => router.push(card.href)}
-              className="p-5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-700 cursor-pointer transition-all hover:shadow-xl group"
+              className="text-left p-5 rounded-2xl bg-card border border-border hover:border-input cursor-pointer transition-colors hover:shadow-sm group"
             >
               <div className="flex items-center justify-between mb-3">
-                <div
-                  className={`w-10 h-10 rounded-xl bg-gradient-to-tr ${card.color} flex items-center justify-center text-white shadow-md`}
-                >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                   <Icon className="w-5 h-5" />
                 </div>
-                <ArrowUpRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
               </div>
-              <p className="text-xs font-medium text-zinc-400">{card.title}</p>
-              <p className="text-2xl font-bold text-white mt-1">
+              <p className="text-xs font-medium text-muted-foreground">
+                {card.title}
+              </p>
+              <p className="text-2xl font-semibold text-foreground mt-1">
                 {loading ? "..." : card.value}
               </p>
-            </div>
+            </button>
           );
         })}
       </div>
 
       {/* Service Health Grid */}
-      <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
-        <h2 className="text-sm font-bold text-white flex items-center gap-2">
-          <Server className="w-4 h-4 text-indigo-400" />
+      <div className="p-6 rounded-2xl bg-card border border-border space-y-4">
+        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <Server className="w-4 h-4 text-primary" />
           Infrastructure Health Matrix
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
@@ -172,21 +168,21 @@ export default function AdminOverviewPage() {
             .map((svc) => (
               <div
                 key={svc.name}
-                className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/60 space-y-1"
+                className="p-3 rounded-xl bg-muted/50 border border-border space-y-1"
               >
                 <div className="flex items-center justify-between">
                   <span
-                    className={`w-2 h-2 rounded-full ${svc.status === "UP" ? "bg-emerald-400" : "bg-red-400"}`}
+                    className={`w-2 h-2 rounded-full ${svc.status === "UP" ? "bg-primary" : "bg-destructive"}`}
                   />
-                  <span className="font-mono text-[10px] text-zinc-500">
+                  <span className="text-xs text-muted-foreground">
                     {svc.port}
                   </span>
                 </div>
-                <p className="font-semibold text-zinc-200 truncate">
+                <p className="font-semibold text-foreground truncate">
                   {svc.name}
                 </p>
                 <p
-                  className={`text-[10px] font-bold ${svc.status === "UP" ? "text-emerald-400" : "text-red-400"}`}
+                  className={`text-xs font-semibold ${svc.status === "UP" ? "text-primary" : "text-destructive"}`}
                 >
                   {svc.status}
                 </p>
@@ -196,42 +192,48 @@ export default function AdminOverviewPage() {
       </div>
 
       {/* Recent Audit Trail Preview */}
-      <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+      <div className="p-6 rounded-2xl bg-card border border-border space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white">
+          <h2 className="text-sm font-bold text-foreground">
             Recent Administrative Events
           </h2>
           <button
             onClick={() => router.push("/admin/audit")}
-            className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+            className="text-xs text-primary hover:text-primary font-semibold"
           >
             View Full Audit Trail &rarr;
           </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div
+          role="region"
+          aria-label="Recent administrative events"
+          tabIndex={0}
+          className="overflow-x-auto"
+        >
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">Recent administrative events</caption>
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400">
+              <tr className="border-b border-border text-muted-foreground">
                 <th className="py-2.5 px-3">Action</th>
                 <th className="py-2.5 px-3">Target</th>
                 <th className="py-2.5 px-3">Actor</th>
                 <th className="py-2.5 px-3">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/50 text-zinc-300 font-mono">
+            <tbody className="divide-y divide-border text-foreground ">
               {recentLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-zinc-800/30">
+                <tr key={log.id} className="hover:bg-muted/50">
                   <td className="py-2.5 px-3">
-                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-indigo-300 text-[11px] font-semibold">
+                    <span className="px-2 py-0.5 rounded bg-secondary text-primary text-xs font-semibold">
                       {log.action}
                     </span>
                   </td>
-                  <td className="py-2.5 px-3 text-zinc-400">
+                  <td className="py-2.5 px-3 text-muted-foreground">
                     {log.resourceType} / {log.resourceId}
                   </td>
-                  <td className="py-2.5 px-3 text-zinc-400">{`${log.actorType}: ${log.actorId}`}</td>
-                  <td className="py-2.5 px-3 text-zinc-500">
+                  <td className="py-2.5 px-3 text-muted-foreground">{`${log.actorType}: ${log.actorId}`}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground">
                     {new Date(log.createdAt).toLocaleString()}
                   </td>
                 </tr>
@@ -240,7 +242,7 @@ export default function AdminOverviewPage() {
                 <tr>
                   <td
                     colSpan={4}
-                    className="py-6 text-center text-zinc-500 italic"
+                    className="py-6 text-center text-muted-foreground italic"
                   >
                     No recent audit events
                   </td>

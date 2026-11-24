@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import Link from "next/navigation";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
   LayoutDashboard,
   Globe,
@@ -11,10 +12,23 @@ import {
   Cpu,
   History,
   LogOut,
-  ExternalLink,
+  ArrowUpRight,
+  Menu,
+  X,
   ShieldCheck,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { IconButton } from "@/components/ui/mail-ui";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
+
+const navItems = [
+  { href: "/admin", label: "Overview", icon: LayoutDashboard },
+  { href: "/admin/domains", label: "Domains & DNS", icon: Globe },
+  { href: "/admin/mailboxes", label: "Mailboxes & Quota", icon: Mail },
+  { href: "/admin/aliases", label: "Aliases & Forwarding", icon: Forward },
+  { href: "/admin/jobs", label: "Provisioning Queue", icon: Cpu },
+  { href: "/admin/audit", label: "Audit Trail", icon: History },
+];
 
 export default function AdminLayout({
   children,
@@ -24,10 +38,10 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [adminUser, setAdminUser] = useState<any>(null);
+  const [navigationOpen, setNavigationOpen] = useState(false);
 
   useEffect(() => {
     if (pathname === "/admin/login") return;
-
     let active = true;
     api
       .getMe()
@@ -45,118 +59,148 @@ export default function AdminLayout({
     };
   }, [pathname, router]);
 
-  // If on login page, render full screen without dashboard shell
-  if (pathname === "/admin/login") {
-    return <>{children}</>;
-  }
+  useEffect(() => {
+    setNavigationOpen(false);
+  }, [pathname]);
+
+  if (pathname === "/admin/login") return <>{children}</>;
 
   const handleLogout = async () => {
     await api.logout();
     router.push("/admin/login");
   };
-
-  const navItems = [
-    { href: "/admin", label: "Overview", icon: LayoutDashboard },
-    { href: "/admin/domains", label: "Domains & DNS", icon: Globe },
-    { href: "/admin/mailboxes", label: "Mailboxes & Quota", icon: Mail },
-    { href: "/admin/aliases", label: "Aliases & Forwarding", icon: Forward },
-    { href: "/admin/jobs", label: "Provisioning Queue", icon: Cpu },
-    { href: "/admin/audit", label: "Audit Trail", icon: History },
-  ];
+  const currentPage =
+    navItems.find((item) => item.href === pathname)?.label || "Overview";
+  const navigation = (
+    <>
+      <div className="px-5 pb-4 pt-7 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        Workspace
+      </div>
+      <nav aria-label="Administration" className="space-y-1 px-3">
+        {navItems.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-current={pathname === href ? "page" : undefined}
+            className={`flex min-h-11 items-center gap-3 rounded-full px-4 text-sm transition-colors ${pathname === href ? "bg-accent font-semibold text-accent-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}
+          >
+            <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
+            {label}
+          </Link>
+        ))}
+      </nav>
+      <div className="mx-5 mt-8 rounded-2xl border bg-card/50 p-4">
+        <ShieldCheck
+          size={20}
+          className="mb-2 text-primary"
+          aria-hidden="true"
+        />
+        <p className="text-sm font-medium">Your mail workspace</p>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          Manage the domains, people and settings behind your inbox.
+        </p>
+      </div>
+      <div className="mt-auto space-y-1 p-3 pt-8">
+        <Link
+          href="/"
+          className="flex min-h-11 items-center gap-3 rounded-full px-4 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <Mail size={18} aria-hidden="true" />
+          Open webmail
+          <ArrowUpRight size={15} className="ml-auto" aria-hidden="true" />
+        </Link>
+        <button
+          onClick={handleLogout}
+          className="flex min-h-11 w-full items-center gap-3 rounded-full px-4 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+        >
+          <LogOut size={18} aria-hidden="true" />
+          Sign Out
+        </button>
+      </div>
+    </>
+  );
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex">
-      {/* Admin Sidebar */}
-      <aside className="w-64 border-r border-zinc-800 bg-zinc-900/60 backdrop-blur-xl flex flex-col justify-between p-4 select-none">
-        <div className="space-y-6">
-          {/* Brand */}
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-md">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-bold text-sm tracking-tight text-white block">
-                FreeMailo
-              </span>
-              <span className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider block">
-                Admin Console
-              </span>
-            </div>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-              return (
-                <button
-                  key={item.href}
-                  onClick={() => router.push(item.href)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                    isActive
-                      ? "bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm"
-                      : "text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+    <div className="min-h-dvh bg-background text-foreground">
+      <a
+        href="#admin-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-[80] focus:rounded-lg focus:bg-card focus:p-3"
+      >
+        Skip to main content
+      </a>
+      <header className="flex h-[76px] items-center gap-3 px-4 sm:px-6">
+        <Dialog.Root open={navigationOpen} onOpenChange={setNavigationOpen}>
+          <Dialog.Trigger asChild>
+            <IconButton label="Open admin navigation" className="lg:hidden">
+              <Menu size={21} />
+            </IconButton>
+          </Dialog.Trigger>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-950/40" />
+            <Dialog.Content
+              aria-describedby={undefined}
+              className="fixed inset-y-0 left-0 z-50 flex w-[min(288px,85vw)] flex-col overflow-y-auto bg-background pb-4 shadow-xl"
+            >
+              <div className="flex items-center justify-between px-5 pt-5">
+                <Dialog.Title className="text-lg font-semibold">
+                  Administration
+                </Dialog.Title>
+                <Dialog.Close asChild>
+                  <IconButton label="Close admin navigation">
+                    <X size={20} />
+                  </IconButton>
+                </Dialog.Close>
+              </div>
+              {navigation}
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+        <Link
+          href="/admin"
+          aria-label="FreeMailo administration home"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg lg:w-[216px]"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Mail size={21} strokeWidth={1.8} aria-hidden="true" />
+          </span>
+          <span className="text-xl font-semibold tracking-tight">
+            FreeMailo
+          </span>
+        </Link>
+        <div className="hidden items-center gap-2 text-sm text-muted-foreground md:flex">
+          <span>Administration</span>
+          <span aria-hidden="true">/</span>
+          <span className="text-foreground">{currentPage}</span>
         </div>
-
-        {/* Footer actions */}
-        <div className="space-y-2 pt-4 border-t border-zinc-800/80">
-          <button
-            onClick={() => router.push("/")}
-            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:bg-zinc-800/60 hover:text-white transition-colors"
+        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-4">
+          <ThemeToggle />
+          <div className="hidden min-w-0 text-right sm:block">
+            <p className="max-w-56 truncate text-sm font-medium">
+              {adminUser?.email || "Loading account…"}
+            </p>
+            <p className="text-xs text-muted-foreground">Administrator</p>
+          </div>
+          <span
+            aria-hidden="true"
+            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground sm:flex"
           >
-            <span className="flex items-center gap-2">
-              <Mail className="w-4 h-4" />
-              Switch to Webmail
-            </span>
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sign Out
-          </button>
+            AD
+          </span>
         </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
-        <header className="h-16 border-b border-zinc-800 bg-zinc-900/40 px-8 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span className="font-semibold text-zinc-200">
-              FreeMailo Cluster:
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-mono text-[10px] font-bold border border-emerald-500/20">
-              HEALTHY • 100% POSTFIX/DOVECOT
-            </span>
+      </header>
+      <div className="flex items-start">
+        <aside className="sticky top-0 hidden min-h-[calc(100dvh-76px)] w-60 shrink-0 flex-col lg:flex">
+          {navigation}
+        </aside>
+        <main
+          id="admin-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-3 pb-4 outline-none sm:px-5 lg:pl-2 lg:pr-6"
+        >
+          <div className="min-h-[calc(100dvh-92px)] rounded-2xl bg-card px-4 py-6 sm:p-7 lg:p-8">
+            {children}
           </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right">
-              <span className="text-xs font-semibold text-zinc-200 block">
-                {adminUser?.email || "admin@freemailo.local"}
-              </span>
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
-                Super Admin
-              </span>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">
-              AD
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 p-8">{children}</main>
+        </main>
       </div>
     </div>
   );
