@@ -299,7 +299,7 @@ test("signup is accessible on mobile in both themes with reduced motion", async 
     path: "/tmp/freemailo-ui-review/signup-mobile.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Switch to dark theme" }).click();
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
   await audit(page);
   await page.screenshot({
     path: "/tmp/freemailo-ui-review/signup-dark.png",

@@ -71,7 +71,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 1: Name
     await expect(page.getByRole("heading", { name: "Create your FreeMailo account" })).toBeVisible();
-    await expect(page.getByText("Step 1 of 6")).toBeVisible();
     await expect(page.getByLabel("First name", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Last name", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Middle name", { exact: false })).toBeVisible();
@@ -91,7 +90,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 2: Birthday
     await expect(page.getByRole("heading", { name: "Basic information" })).toBeVisible();
-    await expect(page.getByText("Step 2 of 6")).toBeVisible();
     await expect(page.getByLabel("Date of birth", { exact: false })).toBeVisible();
     await expect(page.getByLabel("First name", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
@@ -102,7 +100,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 3: Email
     await expect(page.getByRole("heading", { name: "Choose your email address" })).toBeVisible();
-    await expect(page.getByText("Step 3 of 6")).toBeVisible();
     await expect(page.getByLabel("Username", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Email domain")).toBeVisible();
 
@@ -113,7 +110,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 4: Password
     await expect(page.getByRole("heading", { name: "Create a strong password" })).toBeVisible();
-    await expect(page.getByText("Step 4 of 6")).toBeVisible();
     await expect(page.locator("#password")).toBeVisible();
     await expect(page.locator("#confirmPassword")).toBeVisible();
     await expect(page.locator("#password-strength")).toBeVisible();
@@ -125,7 +121,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 5: Recovery
     await expect(page.getByRole("heading", { name: "Add a recovery email" })).toBeVisible();
-    await expect(page.getByText("Step 5 of 6")).toBeVisible();
     await expect(page.getByLabel("Recovery email", { exact: false })).toBeVisible();
 
     // Fill Step 5
@@ -134,7 +129,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Step 6: Review & Create
     await expect(page.getByRole("heading", { name: "Review and create" })).toBeVisible();
-    await expect(page.getByText("Step 6 of 6")).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Next" })).toHaveCount(0);
   });
@@ -269,7 +263,6 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
 
     // Must be on Step 1 with empty inputs
     await expect(page.getByRole("heading", { name: "Create your FreeMailo account" })).toBeVisible();
-    await expect(page.getByText("Step 1 of 6")).toBeVisible();
     await expect(page.getByLabel("First name", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("");
   });
@@ -383,8 +376,8 @@ test.describe("Signup Multi-Step Wizard Flow", () => {
       .analyze();
     expect(axeLight.violations).toEqual([]);
 
-    // Toggle to dark theme
-    await page.getByRole("button", { name: "Switch to dark theme" }).click();
+    // Switch to dark theme
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
     await expect(page.locator("html")).toHaveClass("dark");
 
     // Wait for theme transition to settle before measuring contrast

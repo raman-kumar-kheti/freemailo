@@ -6,8 +6,6 @@ import Link from "next/link";
 import { ArrowLeft, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { api, PublicDomain } from "@/lib/api";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { StepIndicator } from "./StepIndicator";
 import { StepTransition } from "./StepTransition";
 import { SignupFormData, StepNumber, AvailabilityState } from "./types";
 import {
@@ -366,12 +364,6 @@ export function SignupWizard() {
         transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
         className="auth-card relative w-full max-w-[448px] rounded-3xl border bg-card p-6 shadow-sm sm:p-8"
       >
-        <div className="absolute right-4 top-4">
-          <ThemeToggle />
-        </div>
-
-        <StepIndicator currentStep={currentStep} totalSteps={6} />
-
         <form onSubmit={handleSubmit} noValidate>
           <StepTransition
             stepKey={currentStep}
