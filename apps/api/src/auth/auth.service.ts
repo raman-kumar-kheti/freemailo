@@ -195,6 +195,7 @@ export class AuthService {
     refreshTokenStr: string,
     ipAddress?: string,
     userAgent?: string,
+    expectedType?: "admin" | "mailbox",
   ) {
     if (!refreshTokenStr) {
       throw new UnauthorizedException("Refresh token missing");
@@ -223,6 +224,9 @@ export class AuthService {
     let mailboxId: string | null = null;
 
     if (tokenRecord.adminUserId && tokenRecord.adminUser) {
+      if (expectedType === "mailbox") {
+        throw new UnauthorizedException("Mailbox refresh token required");
+      }
       adminId = tokenRecord.adminUserId;
       payload = {
         sub: tokenRecord.adminUser.id,
@@ -232,6 +236,9 @@ export class AuthService {
         isAdmin: true,
       };
     } else if (tokenRecord.mailboxId && tokenRecord.mailbox) {
+      if (expectedType === "admin") {
+        throw new UnauthorizedException("Admin refresh token required");
+      }
       const mailbox = tokenRecord.mailbox;
       if (
         !mailbox.isActive ||
@@ -285,6 +292,7 @@ export class AuthService {
       accessToken: newTokens.accessToken,
       refreshToken: newTokens.refreshToken,
       expiresIn: accessTokenSeconds(),
+      isAdmin: Boolean(adminId),
     };
   }
 

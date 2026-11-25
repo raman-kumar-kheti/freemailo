@@ -107,7 +107,13 @@ export default function MailboxApp() {
   useEffect(() => {
     api
       .getMe()
-      .then(({ user: me }) => setUser(me))
+      .then(({ user: me }) => {
+        if (!me || me.role?.toUpperCase() !== "MAILBOX") {
+          router.replace("/login");
+          return;
+        }
+        setUser(me);
+      })
       .catch(() => router.replace("/login"))
       .finally(() => setAuthChecking(false));
     const updateOnline = () => setOffline(!navigator.onLine);

@@ -23,11 +23,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         (req: Request) => {
-          let token = null;
-          if (req && req.cookies) {
-            token = req.cookies["access_token"];
+          if (!req?.cookies) return null;
+          const url = req.originalUrl || req.url || "";
+          if (
+            url.startsWith("/api/admin") ||
+            url.startsWith("/api/auth/admin")
+          ) {
+            return req.cookies["admin_access_token"] || null;
           }
-          return token;
+          return req.cookies["access_token"] || null;
         },
       ]),
       ignoreExpiration: false,

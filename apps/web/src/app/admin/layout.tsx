@@ -44,7 +44,7 @@ export default function AdminLayout({
     if (pathname === "/admin/login") return;
     let active = true;
     api
-      .getMe()
+      .getAdminMe()
       .then(({ user }) => {
         if (!active) return;
         if (!["ADMIN", "SUPER_ADMIN"].includes(user.role))
@@ -66,7 +66,7 @@ export default function AdminLayout({
   if (pathname === "/admin/login") return <>{children}</>;
 
   const handleLogout = async () => {
-    await api.logout();
+    await api.adminLogout();
     router.push("/admin/login");
   };
   const currentPage =

@@ -58,4 +58,37 @@ describe("refresh rotation", () => {
     expect(() => durationSeconds("100d", 3600)).toThrow();
     expect(() => durationSeconds("-1m", 3600)).toThrow();
   });
+  it("separates admin and mailbox refresh token scopes", async () => {
+    const adminPrisma = {
+      refreshToken: {
+        findUnique: async () => ({
+          expiresAt: new Date(Date.now() + 60000),
+          adminUserId: "admin",
+          adminUser: { id: "admin", email: "admin@example.test", role: "ADMIN" },
+        }),
+      },
+    };
+    const authAdmin = new AuthService(adminPrisma as any, {} as any, {} as any);
+    await expect(
+      authAdmin.refreshTokens("opaque", undefined, undefined, "mailbox"),
+    ).rejects.toThrow("Mailbox refresh token required");
+
+    const mailboxPrisma = {
+      refreshToken: {
+        findUnique: async () => ({
+          expiresAt: new Date(Date.now() + 60000),
+          mailboxId: "mailbox",
+          mailbox: { isActive: true, domain: { isActive: true } },
+        }),
+      },
+    };
+    const authMailbox = new AuthService(
+      mailboxPrisma as any,
+      {} as any,
+      {} as any,
+    );
+    await expect(
+      authMailbox.refreshTokens("opaque", undefined, undefined, "admin"),
+    ).rejects.toThrow("Admin refresh token required");
+  });
 });

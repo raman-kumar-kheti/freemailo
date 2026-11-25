@@ -11,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiResponse } from "@nestjs/swagger";
 import { Request, Response } from "express";
@@ -20,6 +21,8 @@ import { SignupDto } from "./dto/signup.dto";
 import { CheckAvailabilityDto } from "./dto/check-availability.dto";
 import { Public } from "../common/decorators/public.decorator";
 import { JwtAuthGuard } from "../common/guards/jwt-auth.guard";
+import { RolesGuard } from "../common/guards/roles.guard";
+import { Roles, UserRole } from "../common/decorators/roles.decorator";
 import {
   CurrentUser,
   AuthenticatedUser,
@@ -33,6 +36,7 @@ export class AuthController {
   private setCookies(
     res: Response,
     tokens: { accessToken: string; refreshToken: string; expiresIn: number },
+    scope: "mailbox" | "admin" = "mailbox",
   ) {
     const options = {
       httpOnly: true,
@@ -41,13 +45,20 @@ export class AuthController {
         process.env.NODE_ENV === "production",
       sameSite: "strict" as const,
     };
-    res.clearCookie("refresh_token", { path: "/" });
-    res.cookie("refresh_token", tokens.refreshToken, {
+    const refreshName =
+      scope === "admin" ? "admin_refresh_token" : "refresh_token";
+    const accessName =
+      scope === "admin" ? "admin_access_token" : "access_token";
+
+    if (scope === "mailbox") {
+      res.clearCookie("refresh_token", { path: "/" });
+    }
+    res.cookie(refreshName, tokens.refreshToken, {
       ...options,
       path: "/api/auth",
       maxAge: refreshTokenSeconds() * 1000,
     });
-    res.cookie("access_token", tokens.accessToken, {
+    res.cookie(accessName, tokens.accessToken, {
       ...options,
       path: "/api",
       maxAge: tokens.expiresIn * 1000,
@@ -129,7 +140,7 @@ export class AuthController {
     const ua = req.headers["user-agent"];
     const result = await this.authService.loginAdmin(dto, ip, ua);
 
-    this.setCookies(res, result);
+    this.setCookies(res, result, "admin");
 
     return {
       accessToken: result.accessToken,
@@ -141,18 +152,52 @@ export class AuthController {
   @Public()
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: "Rotate and refresh access token" })
+  @ApiOperation({ summary: "Rotate and refresh mailbox access token" })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const rawToken = req.cookies?.["refresh_token"] || req.body?.refreshToken;
+    const bodyToken = req.body?.refreshToken;
+    const rawToken = req.cookies?.["refresh_token"] || bodyToken;
     const ip = req.ip || req.socket.remoteAddress;
     const ua = req.headers["user-agent"];
 
-    const result = await this.authService.refreshTokens(rawToken, ip, ua);
+    const result = await this.authService.refreshTokens(
+      rawToken,
+      ip,
+      ua,
+      bodyToken ? undefined : "mailbox",
+    );
 
-    this.setCookies(res, result);
+    this.setCookies(res, result, result.isAdmin ? "admin" : "mailbox");
+
+    return {
+      accessToken: result.accessToken,
+      expiresIn: result.expiresIn,
+    };
+  }
+
+  @Public()
+  @Post("admin/refresh")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Rotate and refresh admin access token" })
+  async adminRefresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const rawToken =
+      req.cookies?.["admin_refresh_token"] || req.body?.refreshToken;
+    const ip = req.ip || req.socket.remoteAddress;
+    const ua = req.headers["user-agent"];
+
+    const result = await this.authService.refreshTokens(
+      rawToken,
+      ip,
+      ua,
+      "admin",
+    );
+
+    this.setCookies(res, result, "admin");
 
     return {
       accessToken: result.accessToken,
@@ -163,7 +208,7 @@ export class AuthController {
   @Public()
   @Post("logout")
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: "Logout and revoke refresh token" })
+  @ApiOperation({ summary: "Logout mailbox session and revoke refresh token" })
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rawToken = req.cookies?.["refresh_token"] || req.body?.refreshToken;
     if (rawToken) {
@@ -174,10 +219,38 @@ export class AuthController {
     res.clearCookie("access_token", { path: "/api" });
   }
 
+  @Public()
+  @Post("admin/logout")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: "Logout admin session and revoke refresh token" })
+  async adminLogout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const rawToken =
+      req.cookies?.["admin_refresh_token"] || req.body?.refreshToken;
+    if (rawToken) {
+      await this.authService.logout(rawToken);
+    }
+    res.clearCookie("admin_refresh_token", { path: "/api/auth" });
+    res.clearCookie("admin_access_token", { path: "/api" });
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get("me")
-  @ApiOperation({ summary: "Get current user profile" })
+  @ApiOperation({ summary: "Get current mailbox user profile" })
   getMe(@CurrentUser() user: AuthenticatedUser) {
+    if (user.isAdmin) {
+      throw new UnauthorizedException("Mailbox authentication required");
+    }
+    return user;
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Get("admin/me")
+  @ApiOperation({ summary: "Get current admin user profile" })
+  getAdminMe(@CurrentUser() user: AuthenticatedUser) {
     return user;
   }
 }

@@ -64,7 +64,7 @@ async function setup(page: Page) {
       return route.fulfill({ json: { success: true } });
     }
     const respond = (json: unknown) => route.fulfill({ json });
-    if (path === "/api/auth/me")
+    if (path === "/api/auth/me" || path === "/api/auth/admin/me")
       return respond({
         id: "admin-1",
         email: "admin@example.test",

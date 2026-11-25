@@ -103,6 +103,7 @@ export interface MessageDetail {
 class ApiClient {
   private token: string | null = null;
   private refreshing: Promise<boolean> | null = null;
+  private adminRefreshing: Promise<boolean> | null = null;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -153,11 +154,21 @@ class ApiClient {
       retry &&
       path !== "/auth/login" &&
       path !== "/auth/admin/login" &&
-      path !== "/auth/refresh"
+      path !== "/auth/refresh" &&
+      path !== "/auth/admin/refresh"
     ) {
-      // Concurrent 401 responses share one rotation request.
-      if (!this.refreshing) {
-        this.refreshing = fetch(`${API_BASE}/auth/refresh`, {
+      const isAdminRequest =
+        path.startsWith("/admin") || path.startsWith("/auth/admin");
+      const refreshPath = isAdminRequest
+        ? "/auth/admin/refresh"
+        : "/auth/refresh";
+      let refreshPromise = isAdminRequest
+        ? this.adminRefreshing
+        : this.refreshing;
+
+      // Concurrent 401 responses share one rotation request per session scope.
+      if (!refreshPromise) {
+        refreshPromise = fetch(`${API_BASE}${refreshPath}`, {
           method: "POST",
           credentials: "include",
           headers: { "X-Requested-With": "FreeMailo" },
@@ -169,15 +180,25 @@ class ApiClient {
           })
           .catch(() => false)
           .finally(() => {
-            this.refreshing = null;
+            if (isAdminRequest) {
+              this.adminRefreshing = null;
+            } else {
+              this.refreshing = null;
+            }
           });
+        if (isAdminRequest) {
+          this.adminRefreshing = refreshPromise;
+        } else {
+          this.refreshing = refreshPromise;
+        }
       }
-      if (await this.refreshing) return this.request<T>(path, options, false);
+      if (await refreshPromise) return this.request<T>(path, options, false);
       this.setToken(null);
       if (
         typeof window !== "undefined" &&
         !window.location.pathname.startsWith("/login") &&
-        !window.location.pathname.startsWith("/signup")
+        !window.location.pathname.startsWith("/signup") &&
+        !window.location.pathname.startsWith("/admin/login")
       ) {
         window.location.href = window.location.pathname.startsWith("/admin")
           ? "/admin/login"
@@ -242,8 +263,26 @@ class ApiClient {
     }
   }
 
+  async adminLogout() {
+    try {
+      await this.request("/auth/admin/logout", { method: "POST" });
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("freemailo_admin_user");
+      }
+      this.setToken(null);
+    }
+  }
+
   async getMe(): Promise<{ user: User }> {
     const response = await this.request<User | { user: User }>("/auth/me");
+    return { user: "user" in response ? response.user : response };
+  }
+
+  async getAdminMe(): Promise<{ user: User }> {
+    const response = await this.request<User | { user: User }>(
+      "/auth/admin/me",
+    );
     return { user: "user" in response ? response.user : response };
   }
 
