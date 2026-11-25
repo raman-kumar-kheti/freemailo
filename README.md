@@ -158,3 +158,10 @@ Backups contain SQL, Maildir, Rspamd/DKIM, Postfix queue and Redis persistence w
 - [DNS setup](docs/dns-setup-guide.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Risk analysis](docs/risks.md)
+
+## License
+
+This project is licensed under the **PolyForm Noncommercial License 1.0.0** — see the [LICENSE](LICENSE) file for details.
+
+- **Allowed:** Cloning, studying, customizing, self-hosting for personal/non-commercial use, and contributing back to the project.
+- **Not Allowed:** White-labeling, rebranding, reselling, or using this software (original or modified) for any commercial or profit-making purpose without a separate written commercial license from the author.

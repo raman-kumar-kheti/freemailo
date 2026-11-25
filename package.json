@@ -16,8 +16,8 @@
     "admin:create": "node scripts/create-admin.cjs"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Raman Kumar Kheti <ramank.kheti@gmail.com>",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^5.22.0",
