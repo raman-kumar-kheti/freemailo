@@ -137,7 +137,15 @@ FreeMailo is natively multi-domain. You can host multiple domains on the same se
 
 ## Deployment and recovery
 
-Production uses `.env.example`, unique secrets, verified mail TLS and web HTTPS. Follow the [runbook](docs/deployment-runbook.md) to migrate, bootstrap an administrator, configure DNS, and verify external delivery. The development seed and self-signed certificates are not production defaults.
+Production uses `.env.example`, unique secrets, verified mail TLS, outbound port 25 access, and web HTTPS. Follow the [deployment runbook](docs/deployment-runbook.md) to migrate, bootstrap an administrator, configure Nginx + TLS sync, enable outbound port 25 on cloud VMs, configure DNS, and verify external delivery. The development seed and self-signed certificates are not production defaults.
+
+* **One server SSL certificate → three services:** Your single certificate for `MAIL_HOSTNAME` secures **Nginx** (`443` Webmail/Admin), **Postfix** (`465`/`587` SMTP), and **Dovecot** (`993` IMAPS). After issuing Let's Encrypt certificates with Certbot, sync them into `certs/` immediately and wire automatic renewals so mailbox login does not fail with `"Mailbox authentication is temporarily unavailable"` (`DEPTH_ZERO_SELF_SIGNED_CERT`):
+  ```bash
+  sudo ./scripts/sync-certs-to-mail.sh
+  sudo ln -sf "$(pwd)/scripts/sync-certs-to-mail.sh" /etc/letsencrypt/renewal-hooks/deploy/01-sync-freemailo-certs.sh
+  ```
+  *(If using a purchased SSL certificate, place your chain/key directly at `certs/mail.crt` and `certs/mail.key` and restart `dovecot` and `postfix`.)*
+* **Cloud outbound port 25 requirement:** Receiving mail uses inbound port `25`, while direct external sending requires **outbound destination port `25`**. Providers like **AWS EC2** block outbound port `25` by default—attach a static IP (Elastic IP), configure Reverse DNS (`PTR` = `MAIL_HOSTNAME`), and submit AWS's *Request to Remove Email Sending Limitations* form. See [Troubleshooting](docs/troubleshooting.md) if outbound mail stays queued (`status=deferred`).
 
 ```bash
 # Briefly stops mail/API/Redis writers and resumes them after snapshotting.

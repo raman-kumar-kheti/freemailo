@@ -4,7 +4,25 @@ This is a single-host Compose deployment. The local acceptance results are recor
 
 ## Configuration and prerequisites
 
-Use a Linux host with Docker Compose, a static public IP, outbound port 25, sufficient SSD capacity and working authoritative DNS. Start with 4 CPU cores and 4–8 GiB RAM; size disk and backups for the actual quotas. Provision a reverse proxy for webmail HTTPS. Do not publish the internal API, databases, Rspamd controller, LMTP or Dovecot auth ports. Docker port publishing can bypass host firewall rules: use provider firewall rules and Docker-aware filtering.
+Use a Linux host with Docker Compose, a static public IP, outbound port 25, sufficient SSD capacity and working authoritative DNS. Start with 4 CPU cores and 4–8 GiB RAM (or at least 1 GiB RAM + 4 GiB swap for low-traffic personal testing); size disk and backups for the actual quotas. Provision a reverse proxy for webmail HTTPS. Do not publish the internal API, databases, Rspamd controller, LMTP or Dovecot auth ports. Docker port publishing can bypass host firewall rules: use provider firewall rules and Docker-aware filtering.
+
+### Cloud Outbound Port 25 Requirement (AWS EC2 & VPS Providers)
+
+Inbound mail relies on port `25` (`-p 25:25`) being open in your firewall/security group. **Direct outbound email delivery** (sending from Postfix directly to Gmail, Outlook, Yahoo, etc. without a third-party SMTP relay) additionally requires **outbound destination TCP port `25`** to be open from your server to remote mail servers.
+
+Cloud providers such as **AWS EC2** (and several VPS providers) block outbound port `25` at the hypervisor/network layer by default—even when your security group and OS firewall allow all outbound traffic (`0.0.0.0/0`). Inbound emails will arrive normally while outbound messages sit in Postfix's `deferred` queue until port `25` is unblocked.
+
+To enable direct port `25` sending on AWS EC2 (or similar cloud hosts):
+
+1. **Attach a static IP (Elastic IP on AWS):** Auto-assigned public IPs change across instance stops/resizes and do not support custom Reverse DNS.
+2. **Set Forward DNS (`A` record):** Point `MAIL_HOSTNAME` (e.g. `mail.yourdomain.com`) to the static IP.
+3. **Set Reverse DNS (`PTR` record):** Map the static IP back to `MAIL_HOSTNAME` (`mail.yourdomain.com`) in your cloud provider's IP settings (for AWS EC2: **Elastic IPs → Actions → Update reverse DNS**). Major providers (Gmail/Outlook) reject or spam-folder mail from generic cloud PTR hostnames.
+4. **Request outbound port `25` removal:** Submit your provider's port `25` unblock form (on AWS: **Request to Remove Email Sending Limitations** / `ec2-email-limit-rdns-request`), specifying your region, Elastic IP, Reverse DNS, and anti-spam controls (SASL auth required, no open relay, SPF/DKIM/DMARC configured).
+5. **Verify from the host:** Confirm outbound TCP port `25` connects instead of timing out:
+   ```bash
+   nc -4 -vz -w 5 gmail-smtp-in.l.google.com 25
+   ```
+6. **Create a `postmaster@yourdomain.com` mailbox or alias:** Ensures DMARC aggregate reports and RFC bounces are accepted instead of rejected with `550 5.1.1 User unknown`.
 
 Copy `.env.example` to `.env`. Set `POSTGRES_DB=freemailo` and `POSTGRES_USER=freemailo` (the daemon SQL maps currently use these names). Generate distinct secrets with `openssl rand -hex 32`. Set `DATABASE_URL` to the `postgres` Compose hostname and URL-encode any non-hex password. Never use `.env.dev` on a public server.
 
@@ -21,7 +39,79 @@ The API rejects insecure production cookie/TLS settings and missing secrets. For
 
 ## TLS and startup
 
-Obtain certificates using Certbot with DNS validation or an HTTP challenge served by the reverse proxy. Install the full chain as `certs/mail.crt` (0644) and private key as `certs/mail.key` (0600). The mail containers mount this directory read-only. Configure Certbot's deploy hook to invoke the absolute path to `scripts/renew-mail-certs.sh`; it uses `RENEWED_LINEAGE`, replaces both files, updates the pinned relay certificate, and reloads Postfix/Dovecot. Verify renewal with `certbot renew --dry-run`. Generate `certs/dhparams.pem` once with `openssl dhparam -out certs/dhparams.pem 2048` (0644); Postfix startup requires all three files. Configure the web reverse proxy separately for HTTPS and SSE streaming (disable buffering and allow long-lived responses).
+A single server TLS certificate issued for `MAIL_HOSTNAME` (e.g. `mail.yourdomain.com`) is shared across **three separate services**—regardless of how many virtual email domains you host in the Admin UI:
+
+1. **Nginx (Host Reverse Proxy, Port `443`):** Serves the Webmail & Admin UI over HTTPS (`/api/` → `127.0.0.1:4000`, `/` → `127.0.0.1:3000`). Certbot configures Nginx directly.
+2. **Postfix (Container, Ports `25`, `465`, `587`):** Encrypts inbound/outbound SMTP and authenticated submission using `certs/mail.crt` and `certs/mail.key` mounted read-only at `/etc/ssl/mail/`.
+3. **Dovecot (Container, Port `993`):** Encrypts IMAPS connections—used both by external mail clients (Thunderbird, Apple Mail) **and** by the FreeMailo API (`freemailo-api`) when authenticating mailbox logins.
+
+Because `NODE_ENV=production` enforces `MAIL_TLS_REJECT_UNAUTHORIZED=true` and verifies Dovecot against `MAIL_TLS_SERVERNAME` (`${MAIL_HOSTNAME}`), leaving a self-signed certificate inside `certs/` after enabling HTTPS causes mailbox login to fail with `"Mailbox authentication is temporarily unavailable"` (`DEPTH_ZERO_SELF_SIGNED_CERT`).
+
+### Option A: Let's Encrypt (Certbot + Nginx + Automated Mail Sync)
+
+1. Configure Nginx on the host to proxy `mail.yourdomain.com` to the containers (`127.0.0.1:4000` for `/api/` and `127.0.0.1:3000` for `/`, with `proxy_buffering off;` on `/api/mail/events` for SSE), then obtain the certificate:
+   ```nginx
+   server {
+       listen 80;
+       listen [::]:80;
+       server_name mail.yourdomain.com;
+       client_max_body_size 50M;
+
+       location /api/mail/events {
+           proxy_pass http://127.0.0.1:4000;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           proxy_buffering off;
+           proxy_read_timeout 3600s;
+       }
+
+       location /api/ {
+           proxy_pass http://127.0.0.1:4000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location / {
+           proxy_pass http://127.0.0.1:3000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection "upgrade";
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
+   ```
+   ```bash
+   sudo certbot --nginx -d mail.yourdomain.com --non-interactive --agree-tos -m admin@yourdomain.com --redirect
+   ```
+2. **Sync the Let's Encrypt certificate into `certs/` immediately** (required because Docker containers cannot read root-owned `/etc/letsencrypt/` directly):
+   ```bash
+   sudo ./scripts/sync-certs-to-mail.sh
+   ```
+   `scripts/sync-certs-to-mail.sh` reads `MAIL_HOSTNAME` from `.env` (or `RENEWED_LINEAGE` from Certbot), copies `fullchain.pem` → `certs/mail.crt` (`0644`) and `privkey.pem` → `certs/mail.key` (`0600`), preserves repository ownership, and restarts `dovecot` and `postfix`.
+3. **Automate future 90-day renewals:** Symlink `scripts/sync-certs-to-mail.sh` (or use `scripts/renew-mail-certs.sh`, which reloads Postfix/Dovecot and refreshes the pinned relay certificate) as a Certbot deploy hook, then test with a dry run:
+   ```bash
+   sudo ln -sf "$(pwd)/scripts/sync-certs-to-mail.sh" /etc/letsencrypt/renewal-hooks/deploy/01-sync-freemailo-certs.sh
+   sudo certbot renew --dry-run
+   ```
+
+### Option B: Commercial / Purchased SSL Certificate
+
+If you purchased a commercial certificate instead of using Let's Encrypt, you do not need Certbot or renewal hooks: install your CA full chain as `certs/mail.crt` (`0644`), your private key as `certs/mail.key` (`0600`), and restart Postfix and Dovecot (`docker compose restart dovecot postfix`).
+
+### DH Parameters & Initial Stack Startup
+
+Generate `certs/dhparams.pem` once with `openssl dhparam -out certs/dhparams.pem 2048` (`0644`); Postfix startup requires `mail.crt`, `mail.key`, and `dhparams.pem`. Ensure `certs/` contains valid certificates before starting the mail stack (or use `./scripts/generate-certs.sh ./certs mail.yourdomain.com` only as a temporary bootstrap before running `sync-certs-to-mail.sh`).
 
 ```bash
 # Database first, then a dedicated migration container with the Prisma CLI.
